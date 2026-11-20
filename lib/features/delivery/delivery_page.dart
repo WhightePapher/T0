@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../models/mock_data.dart';
+import '../../theme/motion.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/ghost_button.dart';
+import '../../widgets/motion_bits.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/progress_ring.dart';
 import '../../widgets/status_dot.dart';
@@ -71,7 +73,6 @@ class DeliveryPage extends StatelessWidget {
 
   Widget _summaryCard(BuildContext context, T0Store store) {
     final T0Metrics m = context.metrics;
-    final int percent = (store.deliveryProgress * 100).round();
     final bool allDone = store.pendingCount == 0;
     return PaperCard(
       padding: const EdgeInsets.fromLTRB(24, 28, 24, 22),
@@ -83,11 +84,12 @@ class DeliveryPage extends StatelessWidget {
               value: store.deliveryProgress,
               size: 150,
               strokeWidth: 11,
-              child: Column(
+              // 环 sweep 600ms + 百分比同步 count-up（取整显示，不逐帧抖）
+              counter: (BuildContext context, double v) => Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   Text(
-                    '$percent%',
+                    '${(v * 100).round()}%',
                     style: TextStyle(
                       fontFamily: T0.serifFamily,
                       fontFamilyFallback: T0.serifFallback,
@@ -281,6 +283,8 @@ class DeliveryPage extends StatelessWidget {
               context,
               const <String>['已确认', '待确认', '待补充'][i],
               <List<ProjectModule>>[done, review, pending][i],
+              // 打勾按整张清单的顺序错峰 60ms，不是每组从头开始
+              <int>[0, done.length, done.length + review.length][i],
             ),
           ],
           const Divider(height: 1),
@@ -313,6 +317,7 @@ class DeliveryPage extends StatelessWidget {
     BuildContext context,
     String title,
     List<ProjectModule> modules,
+    int startIndex,
   ) {
     final T0Store store = T0Store.instance;
     return Column(
@@ -339,12 +344,13 @@ class DeliveryPage extends StatelessWidget {
               style: context.tMeta.copyWith(fontSize: 11 * context.s),
             ),
           ),
-        for (final ProjectModule module in modules)
+        for (int i = 0; i < modules.length; i++)
           _CheckRow(
-            module: module,
-            status: store.statusOf(module.id),
+            module: modules[i],
+            status: store.statusOf(modules[i].id),
+            delay: T0Motion.staggerCheck * (startIndex + i),
             onTap: () {
-              store.setActiveModule(module.id);
+              store.setActiveModule(modules[i].id);
               go(context, '/workspace');
             },
           ),
@@ -353,14 +359,18 @@ class DeliveryPage extends StatelessWidget {
   }
 
   void _openExport(BuildContext context, T0Store store) {
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: context.pal.scrim.withValues(alpha: 0.4),
-      builder: (BuildContext context) => _ExportDialog(
-        settled: store.settledCount,
-        pending: store.pendingCount,
-        total: store.total,
+    // 导出成功弹层：scale 0.96→1 + fade，220ms enter / 160ms exit。
+    // 弹层本身先停在「正在生成 PPTX」2s —— 那就是带待补充导出前的那次确认停顿。
+    Navigator.of(context).push<void>(
+      t0DialogRoute<void>(
+        context: context,
+        dismissible: false,
+        barrierLabel: '导出',
+        builder: (BuildContext context) => _ExportDialog(
+          settled: store.settledCount,
+          pending: store.pendingCount,
+          total: store.total,
+        ),
       ),
     );
   }
@@ -371,11 +381,15 @@ class _CheckRow extends StatefulWidget {
     required this.module,
     required this.status,
     required this.onTap,
+    this.delay = Duration.zero,
   });
 
   final ProjectModule module;
   final ModuleStatus status;
   final VoidCallback onTap;
+
+  /// 逐条打勾的错峰延时
+  final Duration delay;
 
   @override
   State<_CheckRow> createState() => _CheckRowState();
@@ -398,28 +412,32 @@ class _CheckRowState extends State<_CheckRow> {
           padding: const EdgeInsets.fromLTRB(22, 11, 18, 11),
           child: Row(
             children: <Widget>[
-              Container(
-                width: 24,
-                height: 24,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: statusSoftColor(widget.status, context.pal),
-                ),
-                // 图标跟着状态走：已确认=勾，待确认=时钟，待补充=感叹号
-                child: switch (widget.status) {
-                  ModuleStatus.done => Icon(Icons.check, size: 13, color: context.pal.accent),
-                  ModuleStatus.review => Icon(Icons.schedule, size: 13, color: context.pal.warn),
-                  ModuleStatus.missing => Text(
-                      '!',
-                      style: context.tBody.copyWith(
-                        fontSize: 12 * context.s,
-                        fontWeight: FontWeight.w700,
-                        color: context.pal.danger,
+              if (widget.status == ModuleStatus.done)
+                // 逐条打勾：24px 徽章 + 300ms 描线，按 60ms 错峰
+                T0CheckBadge(size: 24, delay: widget.delay)
+              else
+                Container(
+                  width: 24,
+                  height: 24,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: statusSoftColor(widget.status, context.pal),
+                  ),
+                  // 图标跟着状态走：待确认=时钟，待补充=感叹号
+                  child: switch (widget.status) {
+                    ModuleStatus.done => const SizedBox.shrink(),
+                    ModuleStatus.review => Icon(Icons.schedule, size: 13, color: context.pal.warn),
+                    ModuleStatus.missing => Text(
+                        '!',
+                        style: context.tBody.copyWith(
+                          fontSize: 12 * context.s,
+                          fontWeight: FontWeight.w700,
+                          color: context.pal.danger,
+                        ),
                       ),
-                    ),
-                },
-              ),
+                  },
+                ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -512,7 +530,18 @@ class _ExportDialogState extends State<_ExportDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
+              duration: T0Motion.dur(context, T0Motion.dialogIn),
+              switchInCurve: T0Motion.enter,
+              switchOutCurve: T0Motion.exit,
+              // 成功态：scale 0.96→1 + fade，和弹层本身同一套参数
+              transitionBuilder: (Widget child, Animation<double> animation) =>
+                  FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.96, end: 1).animate(animation),
+                  child: child,
+                ),
+              ),
               child: _generating
                   ? _generatingView(context)
                   : _successView(context),

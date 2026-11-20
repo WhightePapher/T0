@@ -10,6 +10,7 @@ import 'models/mock_data.dart';
 import 'perf/frame_stats.dart';
 import 'perf/perf_platform.dart';
 import 'theme/app_theme.dart';
+import 'theme/motion.dart';
 import 'theme/theme_controller.dart';
 import 'theme/tokens.dart';
 
@@ -23,7 +24,14 @@ void main(List<String> args) {
       route = arg.substring('--route='.length);
     } else if (arg.startsWith('--perf=')) {
       perf = arg.substring('--perf='.length);
+    } else if (arg.startsWith('--motion=')) {
+      T0Motion.captureScale = double.tryParse(arg.substring('--motion='.length)) ?? 1;
     }
+  }
+  // web 截图：?motion=6（见 tool/capture_motion.py）
+  final String? motion = Uri.base.queryParameters['motion'];
+  if (motion != null) {
+    T0Motion.captureScale = double.tryParse(motion) ?? 1;
   }
   runApp(T0App(initialRoute: route, perfScenario: perf));
 }
@@ -229,8 +237,8 @@ Route<dynamic> _fadeUpRoute(Widget page, RouteSettings settings) {
     // 五步是「往下一步走」的线性流程，数据都在 T0Store 单例里，
     // 回到上一页时重建即可，不需要为不可见的页面每帧付钱。
     maintainState: false,
-    transitionDuration: const Duration(milliseconds: 240),
-    reverseTransitionDuration: const Duration(milliseconds: 180),
+    transitionDuration: T0Motion.scaled(T0Motion.pageIn),
+    reverseTransitionDuration: T0Motion.scaled(T0Motion.pageOut),
     pageBuilder: (BuildContext context, Animation<double> animation, Animation<double> secondary) => page,
     transitionsBuilder: (
       BuildContext context,
@@ -238,24 +246,64 @@ Route<dynamic> _fadeUpRoute(Widget page, RouteSettings settings) {
       Animation<double> secondary,
       Widget child,
     ) {
-      final Animation<double> curved = CurvedAnimation(
+      // 主题渐变进行中 / 系统减弱动效：整段转场让路，直接落位（不是缩短，是不动）
+      if (T0Motion.dur(context, T0Motion.pageIn) == Duration.zero) return child;
+      // 进：240ms enter；退：180ms（reverseTransitionDuration）走 exit
+      final Animation<double> incoming = CurvedAnimation(
         parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
+        curve: T0Motion.enter,
+        reverseCurve: T0Motion.exit,
       );
-      return AnimatedBuilder(
-        animation: curved,
-        builder: (BuildContext context, Widget? child) => Opacity(
-          opacity: curved.value.clamp(0.0, 1.0),
-          child: Transform.translate(
-            offset: Offset(0, 8 * (1 - curved.value)),
-            child: child,
-          ),
-        ),
+      // 旧页：靠 secondaryAnimation 反推 —— 新页压上来时它 fade 1→0、上移 0→−4，
+      // 两页因此有前后层次，而不是硬叠在一起。
+      final Animation<double> outgoing = CurvedAnimation(
+        parent: secondary,
+        curve: T0Motion.enter,
+        reverseCurve: T0Motion.exit,
+      );
+      return _FadeUpTransition(
+        incoming: incoming,
+        outgoing: outgoing,
         child: child,
       );
     },
   );
+}
+
+/// 页面转场的两层合成：新页 fade 0→1 + 上移 8→0；旧页 fade 1→0 + 上移 0→−4。
+///
+/// [child] 通过 `AnimatedBuilder.child` 传入，每帧只重跑这一层 `Opacity / Transform`，
+/// 页面本体不重建。
+class _FadeUpTransition extends StatelessWidget {
+  const _FadeUpTransition({
+    required this.incoming,
+    required this.outgoing,
+    required this.child,
+  });
+
+  final Animation<double> incoming;
+  final Animation<double> outgoing;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge(<Listenable>[incoming, outgoing]),
+      child: child,
+      builder: (BuildContext context, Widget? child) {
+        final double enter = incoming.value.clamp(0.0, 1.0);
+        final double leave = outgoing.value.clamp(0.0, 1.0);
+        final double opacity = (enter * (1 - leave)).clamp(0.0, 1.0);
+        return Opacity(
+          opacity: opacity,
+          child: Transform.translate(
+            offset: Offset(0, 8 * (1 - enter) - 4 * leave),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
 }
 
 Route<dynamic> _routeFor(RouteSettings settings) {

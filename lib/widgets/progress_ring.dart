@@ -2,12 +2,18 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../theme/motion.dart';
 import '../theme/palette.dart';
 
 /// 环形进度（CustomPaint）。值来自「已确认模块数 / 总数」。
 ///
 /// 颜色在 build 里从当前调色板取（不传就是 accent / canvas），
 /// 并交给 painter 在 shouldRepaint 里比较 —— 这样主题渐变的每一帧都会重绘。
+///
+/// 动效（G3 / G8 共用）：首次出现时弧线从 0 扫到目标值 [T0Motion.ring]（600ms
+/// standard）；给了 [counter] 的话，环中心数字跟着同一个插值值 count-up（取整），
+/// 两者天然同步。重建只发生在 `TweenAnimationBuilder` 的 builder 里 ——
+/// CustomPaint 与中心文字，不碰卡片 / 页面。
 class ProgressRing extends StatelessWidget {
   const ProgressRing({
     super.key,
@@ -17,6 +23,7 @@ class ProgressRing extends StatelessWidget {
     this.color,
     this.track,
     this.child,
+    this.counter,
   });
 
   final double value;
@@ -30,6 +37,10 @@ class ProgressRing extends StatelessWidget {
   final Color? track;
   final Widget? child;
 
+  /// 环中心数字的 count-up：入参是当前插值到的 0..1 进度（取整显示交给调用点）。
+  /// 给了它就优先于 [child]。
+  final Widget Function(BuildContext context, double value)? counter;
+
   @override
   Widget build(BuildContext context) {
     final T0Palette pal = context.pal;
@@ -42,7 +53,9 @@ class ProgressRing extends StatelessWidget {
       trackColor,
       min: 3.0,
     );
-    return SizedBox(
+    final double target = value.clamp(0, 1).toDouble();
+
+    Widget content(double v) => SizedBox(
       width: size,
       height: size,
       child: Stack(
@@ -50,15 +63,27 @@ class ProgressRing extends StatelessWidget {
         children: <Widget>[
           CustomPaint(
             painter: _RingPainter(
-              value: value.clamp(0, 1).toDouble(),
+              value: v,
               strokeWidth: strokeWidth,
               color: ringColor,
               track: trackColor,
             ),
           ),
-          if (child != null) Center(child: child),
+          if (counter != null)
+            Center(child: counter!(context, v))
+          else if (child != null)
+            Center(child: child),
         ],
       ),
+    );
+
+    // 时长为 0（主题渐变中 / 减弱动效）时 TweenAnimationBuilder 直接落在终值上，
+    // 不会因为换了分支而重播一次 sweep。
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: target),
+      duration: T0Motion.dur(context, T0Motion.ring),
+      curve: T0Motion.standard,
+      builder: (BuildContext context, double v, Widget? _) => content(v),
     );
   }
 }

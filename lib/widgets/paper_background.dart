@@ -67,6 +67,7 @@ class DashedBox extends StatelessWidget {
     this.fill,
     this.dash = 7,
     this.gap = 5,
+    this.strokeWidth = 1,
   });
 
   final Widget child;
@@ -79,6 +80,9 @@ class DashedBox extends StatelessWidget {
   final double dash;
   final double gap;
 
+  /// 描边宽度：拖入区 hover 时 1 → 1.5（画在 painter 里，不占布局）
+  final double strokeWidth;
+
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
@@ -88,6 +92,7 @@ class DashedBox extends StatelessWidget {
         fill: fill,
         dash: dash,
         gap: gap,
+        strokeWidth: strokeWidth,
       ),
       child: Padding(padding: padding, child: child),
     );
@@ -101,6 +106,7 @@ class _DashedBorderPainter extends CustomPainter {
     required this.fill,
     required this.dash,
     required this.gap,
+    required this.strokeWidth,
   });
 
   final double radius;
@@ -108,6 +114,7 @@ class _DashedBorderPainter extends CustomPainter {
   final Color? fill;
   final double dash;
   final double gap;
+  final double strokeWidth;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -125,7 +132,7 @@ class _DashedBorderPainter extends CustomPainter {
     final Paint stroke = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
+      ..strokeWidth = strokeWidth;
 
     for (final PathMetric metric in path.computeMetrics()) {
       double distance = 0;
@@ -141,5 +148,6 @@ class _DashedBorderPainter extends CustomPainter {
   bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
       oldDelegate.color != color ||
       oldDelegate.fill != fill ||
-      oldDelegate.radius != radius;
+      oldDelegate.radius != radius ||
+      oldDelegate.strokeWidth != strokeWidth;
 }

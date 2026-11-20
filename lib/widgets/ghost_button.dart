@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/motion.dart';
 import '../theme/palette.dart';
 import '../theme/tokens.dart';
 
@@ -65,41 +66,47 @@ class _SecondaryButtonState extends State<SecondaryButton> {
                 widget.onPressed!.call();
               }
             : null,
-        child: AnimatedContainer(
-          duration: context.anim(const Duration(milliseconds: 150)),
-          curve: Curves.easeOut,
-          width: widget.expand ? double.infinity : null,
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.dense ? 14 : 20,
-            vertical: widget.dense ? 8 : 12,
-          ),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(T0.pillRadius),
-            border: Border.all(color: borderColor),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              if (widget.icon != null) ...<Widget>[
-                Icon(widget.icon, size: 15, color: enabled ? tone : pal.muted),
-                const SizedBox(width: 7),
-              ],
-              Flexible(
-                child: Text(
-                  widget.label,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.tBody.copyWith(
-                    color: enabled ? tone : pal.muted,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 13 * context.s,
+        child: AnimatedScale(
+          // 按压反馈：0.985 / 90ms instant（缩放不占布局）
+          scale: _down ? 0.985 : 1,
+          duration: T0Motion.dur(context, T0Motion.instant),
+          curve: T0Motion.standard,
+          child: AnimatedContainer(
+            duration: T0Motion.dur(context, T0Motion.fast),
+            curve: Curves.easeOut,
+            width: widget.expand ? double.infinity : null,
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.dense ? 14 : 20,
+              vertical: widget.dense ? 8 : 12,
+            ),
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(T0.pillRadius),
+              border: Border.all(color: borderColor),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                if (widget.icon != null) ...<Widget>[
+                  Icon(widget.icon, size: 15, color: enabled ? tone : pal.muted),
+                  const SizedBox(width: 7),
+                ],
+                Flexible(
+                  child: Text(
+                    widget.label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.tBody.copyWith(
+                      color: enabled ? tone : pal.muted,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 13 * context.s,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -128,26 +135,44 @@ class GhostButton extends StatefulWidget {
 
 class _GhostButtonState extends State<GhostButton> {
   bool _hover = false;
+  bool _down = false;
 
   @override
   Widget build(BuildContext context) {
     final T0Palette pal = context.pal;
+    final bool enabled = widget.onPressed != null;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
+      onExit: (_) => setState(() {
+        _hover = false;
+        _down = false;
+      }),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: widget.onPressed,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: Text(
-            widget.label,
-            style: context.tBody.copyWith(
-              fontSize: 13 * context.s,
-              color: _hover ? pal.ink : (widget.color ?? pal.ink2),
-              decoration: _hover ? TextDecoration.underline : TextDecoration.none,
-              decorationColor: pal.lineStrong,
+        onTapDown: enabled ? (_) => setState(() => _down = true) : null,
+        onTapCancel: enabled ? () => setState(() => _down = false) : null,
+        onTapUp: enabled
+            ? (_) {
+                setState(() => _down = false);
+                widget.onPressed!.call();
+              }
+            : null,
+        child: AnimatedScale(
+          // 按压反馈：0.985 / 90ms instant（缩放不占布局，文字按钮命中区不变）
+          scale: _down ? 0.985 : 1,
+          duration: T0Motion.dur(context, T0Motion.instant),
+          curve: T0Motion.standard,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Text(
+              widget.label,
+              style: context.tBody.copyWith(
+                fontSize: 13 * context.s,
+                color: _hover ? pal.ink : (widget.color ?? pal.ink2),
+                decoration: _hover ? TextDecoration.underline : TextDecoration.none,
+                decorationColor: pal.lineStrong,
+              ),
             ),
           ),
         ),

@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../models/mock_data.dart';
+import '../../theme/motion.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/ghost_button.dart';
+import '../../widgets/motion_bits.dart';
 import '../../widgets/primary_button.dart';
 
 /// 3 · 大纲确认：中央大纲树（可折叠）+ 素材摘要 + 右侧结构建议。
@@ -41,6 +45,66 @@ class _OutlinePageState extends State<OutlinePage> {
   final List<bool?> _handled = <bool?>[null, null];
   /// 采纳前的章节页数，撤销时按原值还原
   final Map<int, String> _pagesBefore = <int, String>{};
+
+  /// 正在收起的章节行（行高 1→0，其余行跟着平滑让位）
+  int? _collapsing;
+  Timer? _collapseTimer;
+
+  /// 新增行的高亮（green-soft 3s 淡出）
+  int? _highlight;
+  int _highlightSeed = 0;
+
+  /// 「重新生成」：整列先淡到 0.6，再逐行重新入场
+  bool _dim = false;
+  int _regenToken = 0;
+
+  @override
+  void dispose() {
+    _collapseTimer?.cancel();
+    super.dispose();
+  }
+
+  /// 删除：先让这一行高度收到 0（其余行平滑让位），240ms 后再真删。
+  void _removeChapter(BuildContext context, int index, int length) {
+    if (length <= 3) {
+      showT0Toast(context, '至少保留 3 个章节，才能形成完整汇报结构。');
+      return;
+    }
+    if (_collapsing != null) return;
+    setState(() => _collapsing = index);
+    _collapseTimer?.cancel();
+    _collapseTimer = Timer(T0Motion.dur(context, T0Motion.rowResize), () {
+      if (!mounted) return;
+      setState(() {
+        _store.removeChapter(index);
+        _collapsing = null;
+        _expanded.clear();
+      });
+      showT0Toast(context, '章节已移除，后面的内容会重新排序。');
+    });
+  }
+
+  void _addChapter(BuildContext context) {
+    _store.addChapter();
+    setState(() {
+      _highlight = _store.outline.value.length - 1;
+      _highlightSeed++;
+    });
+    showT0Toast(context, '已新增一个章节，确认前都可以继续调整。');
+  }
+
+  /// 重新生成：整列淡到 0.6（120ms）→ 逐行重新入场（stagger 30ms）。
+  Future<void> _regenerate(BuildContext context) async {
+    if (_dim) return;
+    setState(() => _dim = true);
+    await Future<void>.delayed(T0Motion.dur(context, T0Motion.hint));
+    if (!mounted || !context.mounted) return;
+    setState(() {
+      _dim = false;
+      _regenToken++;
+    });
+    showT0Toast(context, '已按当前材料重新生成，结构未发生大变化。');
+  }
 
   static const List<_Suggestion> _suggestions = <_Suggestion>[
     _Suggestion(
@@ -223,10 +287,7 @@ class _OutlinePageState extends State<OutlinePage> {
                   label: '新增章节',
                   icon: Icons.add,
                   dense: true,
-                  onPressed: () {
-                    _store.addChapter();
-                    showT0Toast(context, '已新增一个章节，确认前都可以继续调整。');
-                  },
+                  onPressed: () => _addChapter(context),
                 ),
               ],
             ),
@@ -234,32 +295,41 @@ class _OutlinePageState extends State<OutlinePage> {
           const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Column(
-              children: <Widget>[
-                for (int i = 0; i < items.length; i++)
-                  _ChapterRow(
-                    index: i,
-                    item: items[i],
-                    expanded: _expanded.contains(i),
-                    last: i == items.length - 1,
-                    onToggle: () => setState(() {
-                      if (_expanded.contains(i)) {
-                        _expanded.remove(i);
-                      } else {
-                        _expanded.add(i);
-                      }
-                    }),
-                    onRemove: () {
-                      if (items.length <= 3) {
-                        showT0Toast(context, '至少保留 3 个章节，才能形成完整汇报结构。');
-                        return;
-                      }
-                      setState(() => _expanded.clear());
-                      _store.removeChapter(i);
-                      showT0Toast(context, '章节已移除，后面的内容会重新排序。');
-                    },
-                  ),
-              ],
+            // 整列淡到 0.6 再逐行入场（「重新生成」时）
+            child: AnimatedOpacity(
+              opacity: _dim ? 0.6 : 1,
+              duration: T0Motion.dur(context, T0Motion.hint),
+              curve: T0Motion.standard,
+              child: Column(
+                children: <Widget>[
+                  for (int i = 0; i < items.length; i++)
+                    T0Enter(
+                      // token 变了就换 key → 重新入场（重新生成时逐行 stagger 30ms）
+                      key: ValueKey<String>('chapter-$_regenToken-$i'),
+                      delay: T0Motion.staggerOutline * i,
+                      duration: T0Motion.base,
+                      offset: const Offset(0, 6),
+                      // 首次进入不做错峰入场：页面转场已经在做，别叠两层
+                      play: _regenToken > 0,
+                      child: _ChapterRow(
+                        index: i,
+                        item: items[i],
+                        expanded: _expanded.contains(i),
+                        last: i == items.length - 1,
+                        collapsing: _collapsing == i,
+                        highlightSeed: _highlight == i ? _highlightSeed : null,
+                        onToggle: () => setState(() {
+                          if (_expanded.contains(i)) {
+                            _expanded.remove(i);
+                          } else {
+                            _expanded.add(i);
+                          }
+                        }),
+                        onRemove: () => _removeChapter(context, i, items.length),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -279,8 +349,7 @@ class _OutlinePageState extends State<OutlinePage> {
                       ),
                       GhostButton(
                         label: '重新生成',
-                        onPressed: () =>
-                            showT0Toast(context, '已按当前材料重新生成，结构未发生大变化。'),
+                        onPressed: () => _regenerate(context),
                       ),
                       PrimaryButton(
                         label: '确认大纲，拆成模块',
@@ -300,8 +369,7 @@ class _OutlinePageState extends State<OutlinePage> {
                       const SizedBox(width: 4),
                       GhostButton(
                         label: '重新生成',
-                        onPressed: () =>
-                            showT0Toast(context, '已按当前材料重新生成，结构未发生大变化。'),
+                        onPressed: () => _regenerate(context),
                       ),
                       const Spacer(),
                       PrimaryButton(
@@ -496,6 +564,8 @@ class _ChapterRow extends StatefulWidget {
     required this.last,
     required this.onToggle,
     required this.onRemove,
+    this.collapsing = false,
+    this.highlightSeed,
   });
 
   final int index;
@@ -504,6 +574,12 @@ class _ChapterRow extends StatefulWidget {
   final bool last;
   final VoidCallback onToggle;
   final VoidCallback onRemove;
+
+  /// 正在收起（行高 1→0，下面的行跟着平滑让位）
+  final bool collapsing;
+
+  /// 新增行高亮的种子；null = 不高亮
+  final int? highlightSeed;
 
   @override
   State<_ChapterRow> createState() => _ChapterRowState();
@@ -515,133 +591,170 @@ class _ChapterRowState extends State<_ChapterRow> {
   @override
   Widget build(BuildContext context) {
     final OutlineItem item = widget.item;
+    final T0Palette pal = context.pal;
+
+    Widget row = Container(
+      decoration: BoxDecoration(
+        color: _hover ? pal.bg : Colors.transparent,
+        border: widget.last
+            ? null
+            : Border(bottom: BorderSide(color: pal.line)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                // 用 Material 图标而不是字符图标：字符在 CanvasKit 里没有字形会变豆腐块
+                child: Icon(
+                  Icons.drag_indicator,
+                  size: 15,
+                  color: _hover ? pal.ink2 : pal.lineStrong,
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 22,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    (widget.index + 1).toString().padLeft(2, '0'),
+                    style: context.tMono.copyWith(fontSize: 10 * context.s),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      item.title,
+                      style: context.tBody.copyWith(
+                        fontSize: 13.5 * context.s,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${item.note} · ${item.pages}',
+                      style: context.tMeta.copyWith(
+                        fontSize: 11 * context.s,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                widget.expanded ? Icons.expand_less : Icons.expand_more,
+                size: 16,
+                color: _hover ? pal.ink : pal.ink2,
+              ),
+              const SizedBox(width: 4),
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: widget.onRemove,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.delete_outline,
+                      size: 15,
+                      color: _hover ? pal.danger : pal.lineStrong,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (widget.expanded)
+            AnimatedSize(
+              duration: T0Motion.dur(context, T0Motion.pageOut),
+              curve: Curves.easeOut,
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 46, top: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    for (final String point in item.points)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Container(
+                              margin: const EdgeInsets.only(top: 8),
+                              width: 12,
+                              height: 1,
+                              color: pal.accent,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                point,
+                                style: context.tMeta.copyWith(
+                                  fontSize: 11.5 * context.s,
+                                  height: 1.7,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    // 新增行：green-soft 高亮，3s 内淡出（只画底色，不占布局）
+    final int? seed = widget.highlightSeed;
+    if (seed != null) {
+      row = TweenAnimationBuilder<double>(
+        key: ValueKey<int>(seed),
+        tween: Tween<double>(begin: 1, end: 0),
+        duration: T0Motion.dur(context, T0Motion.highlightFade),
+        curve: Curves.linear,
+        child: row,
+        builder: (BuildContext context, double v, Widget? child) => DecoratedBox(
+          decoration: BoxDecoration(
+            color: pal.accentSoft.withValues(alpha: 0.55 * v),
+          ),
+          child: child,
+        ),
+      );
+    }
+
+    // 删除中：行高 1→0 + 淡出，其余行随之平滑上移
+    if (widget.collapsing) {
+      row = TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 1, end: 0),
+        duration: T0Motion.dur(context, T0Motion.rowResize),
+        curve: T0Motion.standard,
+        child: row,
+        builder: (BuildContext context, double v, Widget? child) => Align(
+          alignment: Alignment.topCenter,
+          heightFactor: v,
+          child: ClipRect(child: Opacity(opacity: v, child: child)),
+        ),
+      );
+    }
+
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onToggle,
-        child: Container(
-          decoration: BoxDecoration(
-            color: _hover ? context.pal.bg : Colors.transparent,
-            border: widget.last
-                ? null
-                : Border(bottom: BorderSide(color: context.pal.line)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    // 用 Material 图标而不是字符图标：字符在 CanvasKit 里没有字形会变豆腐块
-                    child: Icon(
-                      Icons.drag_indicator,
-                      size: 15,
-                      color: _hover ? context.pal.ink2 : context.pal.lineStrong,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 22,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        (widget.index + 1).toString().padLeft(2, '0'),
-                        style: context.tMono.copyWith(fontSize: 10 * context.s),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          item.title,
-                          style: context.tBody.copyWith(
-                            fontSize: 13.5 * context.s,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '${item.note} · ${item.pages}',
-                          style: context.tMeta.copyWith(
-                            fontSize: 11 * context.s,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    widget.expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 16,
-                    color: _hover ? context.pal.ink : context.pal.ink2,
-                  ),
-                  const SizedBox(width: 4),
-                  MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
-                      onTap: widget.onRemove,
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(
-                          Icons.delete_outline,
-                          size: 15,
-                          color: _hover ? context.pal.danger : context.pal.lineStrong,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (widget.expanded)
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
-                  alignment: Alignment.topCenter,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 46, top: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        for (final String point in item.points)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Container(
-                                  margin: const EdgeInsets.only(top: 8),
-                                  width: 12,
-                                  height: 1,
-                                  color: context.pal.accent,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    point,
-                                    style: context.tMeta.copyWith(
-                                      fontSize: 11.5 * context.s,
-                                      height: 1.7,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
+        child: row,
       ),
     );
   }

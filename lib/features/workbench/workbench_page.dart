@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../models/mock_data.dart';
+import '../../theme/motion.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/motion_bits.dart';
 import '../../widgets/paper_background.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/project_card.dart';
@@ -140,10 +142,18 @@ class _ProjectStack extends StatelessWidget {
       children: <Widget>[
         Text('最近项目', style: context.tLabel.copyWith(color: context.pal.stepMuted)),
         const SizedBox(height: 12),
-        for (final RecentProject project in recentProjects) ...<Widget>[
-          ProjectCard(
-            project: project,
-            onTap: () => go(context, project.route),
+        for (int i = 0; i < recentProjects.length; i++) ...<Widget>[
+          // 错峰入场：第 i 张延时 i*45ms，fade 0→1 + 上移 8→0，320ms，只播一次。
+          // T0Enter 只重跑自己那一层 Opacity / Transform，卡片本体不重建。
+          T0Enter(
+            key: ValueKey<String>('project-${recentProjects[i].name}'),
+            delay: T0Motion.staggerCard * i,
+            duration: T0Motion.cardIn,
+            offset: const Offset(0, 8),
+            child: ProjectCard(
+              project: recentProjects[i],
+              onTap: () => go(context, recentProjects[i].route),
+            ),
           ),
           const SizedBox(height: 14),
         ],

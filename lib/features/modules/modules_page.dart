@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../models/mock_data.dart';
+import '../../theme/motion.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/motion_bits.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/status_dot.dart';
 
@@ -96,24 +98,30 @@ class _ModuleList extends StatelessWidget {
               itemBuilder: (BuildContext context, int index) {
                 final int id = order[index];
                 final ProjectModule module = store.moduleOf(id);
-                return Padding(
+                // 错峰入场：i*40ms，fade + 上移 6px，280ms（只播首帧一次）
+                return T0Enter(
                   key: ValueKey<int>(id),
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _ModuleCard(
-                    index: index,
-                    module: module,
-                    status: store.statusOf(id),
-                    onOpen: () {
-                      store.setActiveModule(id);
-                      go(context, '/workspace');
-                    },
-                    onCycleStatus: () {
-                      store.cycleStatus(id);
-                      showT0Toast(
-                        context,
-                        '「${module.title}」已切换为 ${store.statusOf(id).label}，进度环同步更新。',
-                      );
-                    },
+                  delay: T0Motion.staggerModule * index,
+                  duration: T0Motion.moduleCardIn,
+                  offset: const Offset(0, 6),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _ModuleCard(
+                      index: index,
+                      module: module,
+                      status: store.statusOf(id),
+                      onOpen: () {
+                        store.setActiveModule(id);
+                        go(context, '/workspace');
+                      },
+                      onCycleStatus: () {
+                        store.cycleStatus(id);
+                        showT0Toast(
+                          context,
+                          '「${module.title}」已切换为 ${store.statusOf(id).label}，进度环同步更新。',
+                        );
+                      },
+                    ),
                   ),
                 );
               },
@@ -146,6 +154,7 @@ class _ModuleCard extends StatefulWidget {
 
 class _ModuleCardState extends State<_ModuleCard> {
   bool _hover = false;
+  bool _down = false;
 
   @override
   Widget build(BuildContext context) {
@@ -153,109 +162,123 @@ class _ModuleCardState extends State<_ModuleCard> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
+      onExit: (_) => setState(() {
+        _hover = false;
+        _down = false;
+      }),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: widget.onOpen,
-        child: AnimatedContainer(
-          duration: context.anim(const Duration(milliseconds: 160)),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          decoration: BoxDecoration(
-            color: context.pal.surface,
-            borderRadius: BorderRadius.circular(T0.cardRadius),
-            border: Border.all(color: _hover ? context.pal.lineStrong : context.pal.line),
-            boxShadow: _hover ? context.pal.floatShadow : null,
-          ),
-          child: Row(
-            children: <Widget>[
-              ReorderableDragStartListener(
-                index: widget.index,
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.grab,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 10),
-                    child: Icon(
-                      Icons.drag_indicator,
-                      size: 16,
-                      color: _hover ? context.pal.ink2 : context.pal.lineStrong,
+        onTapDown: (_) => setState(() => _down = true),
+        onTapCancel: () => setState(() => _down = false),
+        onTapUp: (_) {
+          setState(() => _down = false);
+          widget.onOpen();
+        },
+        child: AnimatedScale(
+          // 按下 0.98 → 抬起，再走页面转场（G1）
+          scale: _down ? 0.98 : 1,
+          duration: T0Motion.dur(context, T0Motion.instant),
+          curve: T0Motion.standard,
+          child: AnimatedContainer(
+            duration: T0Motion.dur(context, T0Motion.fast),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            decoration: BoxDecoration(
+              color: context.pal.surface,
+              borderRadius: BorderRadius.circular(T0.cardRadius),
+              border: Border.all(color: _hover ? context.pal.lineStrong : context.pal.line),
+              boxShadow: _hover ? context.pal.floatShadow : null,
+            ),
+            child: Row(
+              children: <Widget>[
+                ReorderableDragStartListener(
+                  index: widget.index,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.grab,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: Icon(
+                        Icons.drag_indicator,
+                        size: 16,
+                        color: _hover ? context.pal.ink2 : context.pal.lineStrong,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Text(
-                module.number,
-                style: TextStyle(
-                  fontFamily: T0.serifFamily,
-                  fontFamilyFallback: T0.serifFallback,
-                  fontSize: 24 * context.s,
-                  height: 1,
-                  fontWeight: FontWeight.w700,
-                  color: context.pal.accent,
+                Text(
+                  module.number,
+                  style: TextStyle(
+                    fontFamily: T0.serifFamily,
+                    fontFamilyFallback: T0.serifFallback,
+                    fontSize: 24 * context.s,
+                    height: 1,
+                    fontWeight: FontWeight.w700,
+                    color: context.pal.accent,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 18),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        module.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.tBody.copyWith(
+                          fontSize: 13.5 * context.s,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        module.desc,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.tMeta.copyWith(fontSize: 11 * context.s),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     Text(
-                      module.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.tBody.copyWith(
-                        fontSize: 13.5 * context.s,
+                      '${module.pages} 页',
+                      style: context.tMeta.copyWith(
+                        fontSize: 11.5 * context.s,
+                        color: context.pal.ink,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
-                      module.desc,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.tMeta.copyWith(fontSize: 11 * context.s),
+                      module.source,
+                      style: context.tMeta.copyWith(fontSize: 10 * context.s),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    '${module.pages} 页',
-                    style: context.tMeta.copyWith(
-                      fontSize: 11.5 * context.s,
-                      color: context.pal.ink,
-                      fontWeight: FontWeight.w600,
+                const SizedBox(width: 14),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: widget.onCycleStatus,
+                    child: Tooltip(
+                      message: '点击切换状态',
+                      child: StatusChip(status: widget.status),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    module.source,
-                    style: context.tMeta.copyWith(fontSize: 10 * context.s),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 14),
-              MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: widget.onCycleStatus,
-                  child: Tooltip(
-                    message: '点击切换状态',
-                    child: StatusChip(status: widget.status),
-                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Icon(
-                Icons.chevron_right,
-                size: 16,
-                color: _hover ? context.pal.ink : context.pal.lineStrong,
-              ),
-            ],
+                const SizedBox(width: 16),
+                Icon(
+                  Icons.chevron_right,
+                  size: 16,
+                  color: _hover ? context.pal.ink : context.pal.lineStrong,
+                ),
+              ],
+            ),
           ),
         ),
       ),

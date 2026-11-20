@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/motion.dart';
 import '../theme/palette.dart';
 import '../theme/tokens.dart';
 
@@ -62,45 +63,51 @@ class _PrimaryButtonState extends State<PrimaryButton> {
                 widget.onPressed!.call();
               }
             : null,
-        child: AnimatedContainer(
-          duration: context.anim(const Duration(milliseconds: 150)),
-          curve: Curves.easeOut,
-          width: widget.expand ? double.infinity : null,
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.dense ? 18 : 26,
-            vertical: widget.dense ? 10 : 15,
-          ),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(T0.pillRadius),
-            boxShadow: enabled && _hover ? pal.floatShadow : null,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              if (widget.icon != null) ...<Widget>[
-                Icon(widget.icon, size: 16, color: foreground),
-                const SizedBox(width: 8),
-              ],
-              Flexible(
-                child: Text(
-                  widget.label,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.tBody.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15 * context.s,
+        child: AnimatedScale(
+          // 按压反馈：0.985 / 90ms instant。缩放不占布局，按钮命中区不变。
+          scale: _down ? 0.985 : 1,
+          duration: T0Motion.dur(context, T0Motion.instant),
+          curve: T0Motion.standard,
+          child: AnimatedContainer(
+            duration: T0Motion.dur(context, T0Motion.fast),
+            curve: Curves.easeOut,
+            width: widget.expand ? double.infinity : null,
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.dense ? 18 : 26,
+              vertical: widget.dense ? 10 : 15,
+            ),
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(T0.pillRadius),
+              boxShadow: enabled && _hover ? pal.floatShadow : null,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                if (widget.icon != null) ...<Widget>[
+                  Icon(widget.icon, size: 16, color: foreground),
+                  const SizedBox(width: 8),
+                ],
+                Flexible(
+                  child: Text(
+                    widget.label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.tBody.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15 * context.s,
+                    ),
                   ),
                 ),
-              ),
-              if (widget.arrow) ...<Widget>[
-                const SizedBox(width: 10),
-                Icon(Icons.arrow_right_alt, size: 20, color: foreground),
+                if (widget.arrow) ...<Widget>[
+                  const SizedBox(width: 10),
+                  Icon(Icons.arrow_right_alt, size: 20, color: foreground),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

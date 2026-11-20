@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/motion.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/ghost_button.dart';
+import '../../widgets/motion_bits.dart';
 import '../../widgets/paper_background.dart';
 import '../../widgets/primary_button.dart';
 
@@ -101,11 +103,26 @@ class _IntakePageState extends State<IntakePage> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-            child: switch (_mode) {
-              1 => _pastePanel(context),
-              2 => _topicPanel(context),
-              _ => _uploadPanel(context),
-            },
+            // 三种输入方式的内容区 cross-fade 150ms（和 tab 指示器的滑动分开：
+            // 指示器滑、内容淡，两层运动语言不互相抢）
+            child: AnimatedSwitcher(
+              duration: T0Motion.dur(context, T0Motion.fast),
+              switchInCurve: T0Motion.standard,
+              switchOutCurve: T0Motion.exit,
+              layoutBuilder: (Widget? current, List<Widget> previous) =>
+                  Stack(
+                    alignment: Alignment.topLeft,
+                    children: <Widget>[...previous, ?current],
+                  ),
+              child: KeyedSubtree(
+                key: ValueKey<int>(_mode),
+                child: switch (_mode) {
+                  1 => _pastePanel(context),
+                  2 => _topicPanel(context),
+                  _ => _uploadPanel(context),
+                },
+              ),
+            ),
           ),
           const SizedBox(height: 20),
           const Divider(height: 1),
@@ -149,7 +166,7 @@ class _IntakePageState extends State<IntakePage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         if (!_uploaded && !_failed)
-          DashedBox(
+          _DropZone(
             radius: 16,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 42),
             child: Column(
@@ -212,7 +229,7 @@ class _IntakePageState extends State<IntakePage> {
             ),
           )
         else
-          DashedBox(
+          _DropZone(
             radius: 16,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
             child: Column(
@@ -247,12 +264,32 @@ class _IntakePageState extends State<IntakePage> {
           ),
         if (_uploaded) ...<Widget>[
           const SizedBox(height: 16),
-          _fileCard(context),
+          // 文件落位：scale 0.96→1 + fade，200ms（一次性）
+          T0Enter(
+            key: const ValueKey<String>('intake-file-card'),
+            duration: T0Motion.title,
+            offset: Offset.zero,
+            scaleFrom: 0.96,
+            child: _fileCard(context),
+          ),
         ],
-        if (_failed) ...<Widget>[
-          const SizedBox(height: 16),
-          _errorCard(context),
-        ],
+        // 解析失败：高度展开 + fade 220ms。用常驻的 AnimatedSize 撑高，
+        // 插入时不是「凭空多出一块」，而是从 0 长出来；不抖动、不闪红。
+        AnimatedSize(
+          duration: T0Motion.dur(context, T0Motion.failCard),
+          curve: T0Motion.standard,
+          alignment: Alignment.topCenter,
+          child: _failed
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: T0Enter(
+                    duration: T0Motion.failCard,
+                    offset: Offset.zero,
+                    child: _errorCard(context),
+                  ),
+                )
+              : const SizedBox(width: double.infinity, height: 0),
+        ),
         if (_uploaded || _failed) ...<Widget>[
           const SizedBox(height: 14),
           Wrap(
@@ -519,47 +556,117 @@ class _ModeTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final T0Palette pal = context.pal;
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: context.pal.canvas,
+        color: pal.canvas,
         borderRadius: BorderRadius.circular(T0.fieldRadius),
       ),
-      child: Row(
+      child: Stack(
         children: <Widget>[
-          for (int i = 0; i < _labels.length; i++)
-            Expanded(
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onChanged(i),
-                  child: AnimatedContainer(
-                    duration: context.anim(const Duration(milliseconds: 160)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: i == value ? context.pal.surface : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: i == value ? context.pal.line : Colors.transparent,
-                      ),
-                    ),
-                    child: Text(
-                      _labels[i],
-                      textAlign: TextAlign.center,
-                      style: context.tBody.copyWith(
-                        fontSize: 12.5 * context.s,
-                        fontWeight: i == value
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                        color: i == value ? context.pal.ink : context.pal.mutedOnTint,
-                      ),
-                    ),
+          // 指示器：整块滑到新位置（200ms standard），不是淡出淡入
+          Positioned.fill(
+            child: AnimatedAlign(
+              alignment: Alignment(
+                _labels.length <= 1 ? 0 : -1 + 2 * value / (_labels.length - 1),
+                0,
+              ),
+              duration: T0Motion.dur(context, T0Motion.title),
+              curve: T0Motion.standard,
+              child: FractionallySizedBox(
+                widthFactor: 1 / _labels.length,
+                heightFactor: 1,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: pal.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: pal.line),
                   ),
                 ),
               ),
             ),
+          ),
+          Row(
+            children: <Widget>[
+              for (int i = 0; i < _labels.length; i++)
+                Expanded(
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => onChanged(i),
+                      child: Padding(
+                        // 11 = 原来那颗 1px 描边（未选中时是透明描边，但仍然占位）+ 10 inner padding。
+                        // 换成「轨道 + 滑动指示器」之后描边画在指示器上，这里补回这 1px，
+                        // 轨道总高与改造前逐像素一致（v9 基线 273..324 → 改造后同高）。
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        child: Text(
+                          _labels[i],
+                          textAlign: TextAlign.center,
+                          style: context.tBody.copyWith(
+                            fontSize: 12.5 * context.s,
+                            fontWeight: i == value
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                            color: i == value
+                                ? pal.ink
+                                : pal.mutedOnTint,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// 拖入 / 上传区：hover 时描边 1px→1.5px、底色提亮到 accentSoft，150ms。
+///
+/// 描边在 painter 里画、底色是同一个 painter 的 fill —— 两者都不占布局，
+/// 悬停不会让内容挪 1px。
+class _DropZone extends StatefulWidget {
+  const _DropZone({
+    required this.radius,
+    required this.padding,
+    required this.child,
+  });
+
+  final double radius;
+  final EdgeInsetsGeometry padding;
+  final Widget child;
+
+  @override
+  State<_DropZone> createState() => _DropZoneState();
+}
+
+class _DropZoneState extends State<_DropZone> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final T0Palette pal = context.pal;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: _hover ? 1 : 0),
+        duration: T0Motion.dur(context, T0Motion.fast),
+        curve: T0Motion.standard,
+        builder: (BuildContext context, double t, Widget? _) => DashedBox(
+          radius: widget.radius,
+          padding: widget.padding,
+          strokeWidth: 1 + 0.5 * t,
+          color: Color.lerp(pal.lineStrong, pal.accent, t),
+          fill: Color.lerp(pal.surface.withValues(alpha: 0), pal.accentSoft, t),
+          child: widget.child,
+        ),
       ),
     );
   }

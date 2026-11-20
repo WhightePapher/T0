@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/mock_data.dart';
+import '../theme/motion.dart';
 import '../theme/palette.dart';
 import '../theme/tokens.dart';
 import 'progress_ring.dart';
@@ -18,6 +19,7 @@ class ProjectCard extends StatefulWidget {
 
 class _ProjectCardState extends State<ProjectCard> {
   bool _hover = false;
+  bool _down = false;
 
   @override
   Widget build(BuildContext context) {
@@ -28,77 +30,93 @@ class _ProjectCardState extends State<ProjectCard> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
+      onExit: (_) => setState(() {
+        _hover = false;
+        _down = false;
+      }),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: context.anim(const Duration(milliseconds: 160)),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: pal.surface,
-            borderRadius: BorderRadius.circular(T0.cardRadius),
-            border: Border.all(color: _hover ? pal.lineStrong : pal.line),
-            boxShadow: _hover ? pal.floatShadow : null,
-          ),
-          child: Row(
-            children: <Widget>[
-              _ProjectThumb(dark: project.dark),
-              const SizedBox(width: 18),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      project.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.tH3.copyWith(fontSize: 16 * context.s, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 8,
-                      runSpacing: 2,
-                      children: <Widget>[
-                        Text(project.kind, style: context.tMeta),
-                        _Dot(),
-                        Text('${project.modules} 个模块', style: context.tMeta),
-                        _Dot(),
-                        Text(project.edited, style: context.tMeta),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              // 环里已经写着「3/5」，旁边再说一次「已确认 3/5」是同一个数重复两遍。
-              // 这里只留口径（「个模块」），分数交给环；字号 / 字色与交付页那句一致
-              // （11px · ink2Strong），两页并排看能对上。
-              Text(
-                '已确认 ${project.done} 个模块',
-                style: context.tMeta.copyWith(
-                  fontSize: 11 * context.s,
-                  color: pal.ink2Strong,
-                ),
-              ),
-              const SizedBox(width: 10),
-              ProgressRing(
-                value: progress,
-                size: 46,
-                strokeWidth: 4,
-                child: Text(
-                  '${project.done}/${project.total}',
-                  style: context.tMono.copyWith(
-                    fontSize: 11 * context.s,
-                    fontWeight: FontWeight.w600,
-                    color: pal.ink,
+        onTapDown: (_) => setState(() => _down = true),
+        onTapCancel: () => setState(() => _down = false),
+        onTapUp: (_) {
+          setState(() => _down = false);
+          widget.onTap?.call();
+        },
+        child: AnimatedScale(
+          // 按压态：0.99 / 90ms instant；抬起用同一个时长回弹。
+          // hover 抬升（阴影 + lineStrong 描边）保持原样，见下面的 AnimatedContainer。
+          scale: _down ? 0.99 : 1,
+          duration: T0Motion.dur(context, T0Motion.instant),
+          curve: T0Motion.standard,
+          child: AnimatedContainer(
+            duration: T0Motion.dur(context, T0Motion.fast),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: pal.surface,
+              borderRadius: BorderRadius.circular(T0.cardRadius),
+              border: Border.all(color: _hover ? pal.lineStrong : pal.line),
+              boxShadow: _hover ? pal.floatShadow : null,
+            ),
+            child: Row(
+              children: <Widget>[
+                _ProjectThumb(dark: project.dark),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        project.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.tH3.copyWith(fontSize: 16 * context.s, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 2,
+                        children: <Widget>[
+                          Text(project.kind, style: context.tMeta),
+                          _Dot(),
+                          Text('${project.modules} 个模块', style: context.tMeta),
+                          _Dot(),
+                          Text(project.edited, style: context.tMeta),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                // 环里已经写着「3/5」，旁边再说一次「已确认 3/5」是同一个数重复两遍。
+                // 这里只留口径（「个模块」），分数交给环；字号 / 字色与交付页那句一致
+                // （11px · ink2Strong），两页并排看能对上。
+                Text(
+                  '已确认 ${project.done} 个模块',
+                  style: context.tMeta.copyWith(
+                    fontSize: 11 * context.s,
+                    color: pal.ink2Strong,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ProgressRing(
+                  value: progress,
+                  size: 46,
+                  strokeWidth: 4,
+                  // 环 sweep 与中心数字共用一个插值：600ms 内同步从 0 数到 done
+                  counter: (BuildContext context, double v) => Text(
+                    '${(v * project.total).round()}/${project.total}',
+                    style: context.tMono.copyWith(
+                      fontSize: 11 * context.s,
+                      fontWeight: FontWeight.w600,
+                      color: pal.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

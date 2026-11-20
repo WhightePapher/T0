@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../models/mock_data.dart';
+import '../theme/motion.dart';
 import '../theme/palette.dart';
 import '../theme/theme_controller.dart';
 import '../theme/tokens.dart';
@@ -455,7 +457,7 @@ class _NavItemState extends State<_NavItem> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: context.anim(const Duration(milliseconds: 140)),
+          duration: T0Motion.dur(context, T0Motion.fast),
           padding: EdgeInsets.symmetric(
             horizontal: compact ? 10 : 14,
             vertical: 7,
@@ -565,7 +567,7 @@ class _ThemeToggleState extends State<_ThemeToggle> {
           behavior: HitTestBehavior.opaque,
           onTap: controller.toggle,
           child: AnimatedContainer(
-            duration: context.anim(const Duration(milliseconds: 140)),
+            duration: T0Motion.dur(context, T0Motion.fast),
             width: T0.iconButtonSize,
             height: T0.iconButtonSize,
             decoration: BoxDecoration(
@@ -574,7 +576,7 @@ class _ThemeToggleState extends State<_ThemeToggle> {
               border: Border.all(color: _hover ? pal.lineStrong : pal.line),
             ),
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
+              duration: T0Motion.dur(context, T0Motion.title),
               child: _ThemeGlyph(
                 key: ValueKey<String>(dark ? 'theme-glyph-moon' : 'theme-glyph-sun'),
                 dark: dark,
@@ -682,7 +684,7 @@ class _RoundIconButtonState extends State<_RoundIconButton> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: context.anim(const Duration(milliseconds: 140)),
+          duration: T0Motion.dur(context, T0Motion.fast),
           width: T0.iconButtonSize,
           height: T0.iconButtonSize,
           decoration: BoxDecoration(
@@ -736,14 +738,31 @@ class _StepBar extends StatelessWidget {
         ),
       );
       if (step != FlowStep.values.last) {
+        // 进度线：总宽固定（64 / 22），不参与「变宽」——变的是里面那段填充的宽度。
+        // 未走的段是 lineStrong（和原来同一个终态色），走过的段收起成轨道 line。
+        // 轨道 + 填充画在同一个 painter 里：每一帧只画一次、只画两笔，
+        // 不会因为两层 ColoredBox 叠加而在 1px 线上留下半透明行。
+        final bool filled = current != null && state < 0;
         children.add(
-          Container(
-            width: m.isMobile ? 22 : 64,
-            height: 1,
-            margin: const EdgeInsets.symmetric(horizontal: 10),
-            color: current == null
-                ? pal.line
-                : (state < 0 ? pal.lineStrong : pal.line),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: SizedBox(
+              width: m.isMobile ? 22 : 64,
+              height: 1,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: filled ? 1 : 0),
+                duration: T0Motion.dur(context, T0Motion.base),
+                curve: T0Motion.standard,
+                builder: (BuildContext context, double value, Widget? _) =>
+                    CustomPaint(
+                      painter: _StepLinePainter(
+                        progress: value,
+                        track: pal.line,
+                        fill: pal.lineStrong,
+                      ),
+                    ),
+              ),
+            ),
           ),
         );
       }
@@ -769,7 +788,7 @@ class _StepBar extends StatelessWidget {
   }
 }
 
-class _StepDot extends StatelessWidget {
+class _StepDot extends StatefulWidget {
   const _StepDot({required this.step, required this.state});
 
   final FlowStep step;
@@ -778,14 +797,57 @@ class _StepDot extends StatelessWidget {
   final int state;
 
   @override
+  State<_StepDot> createState() => _StepDotState();
+}
+
+class _StepDotState extends State<_StepDot> with SingleTickerProviderStateMixin {
+  /// 进入该步时一次性播：scale 0.6→1 + 外环 1→1.6 且 opacity 1→0
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: T0Motion.stepPulse,
+  );
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final Duration d = T0Motion.dur(context, T0Motion.stepPulse);
+    if (_c.duration != d) _c.duration = d;
+    if (!_started) {
+      _started = true;
+      if (widget.state == 0 && d > Duration.zero) {
+        _c.forward();
+      } else {
+        _c.value = 1; // 非当前步 / 减弱动效：直接落位，不播
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _StepDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final Duration d = T0Motion.dur(context, T0Motion.stepPulse);
+    if (widget.state == 0 && oldWidget.state != 0 && d > Duration.zero) {
+      _c.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final T0Palette pal = context.pal;
-    final bool active = state == 0;
-    final bool done = state > 0;
+    final bool active = widget.state == 0;
+    final bool done = widget.state > 0;
     // 未开始的圈也要看得见：以前描边用 line（白天 1.32:1，几乎等于没有），
     // 数字用 muted；现在两者都走 stepMuted，圈和数字一起 ≥4.9。
     final Color border = active || done ? pal.accent : pal.stepMuted;
-    return Container(
+
+    final Widget circle = Container(
       width: 20,
       height: 20,
       alignment: Alignment.center,
@@ -796,7 +858,7 @@ class _StepDot extends StatelessWidget {
         border: Border.all(color: border, width: 1.2),
       ),
       child: Text(
-        '${step.order}',
+        '${widget.step.order}',
         style: TextStyle(
           fontFamily: T0.sansFamily,
           fontFamilyFallback: T0.sansFallback,
@@ -809,7 +871,97 @@ class _StepDot extends StatelessWidget {
         ),
       ),
     );
+
+    return SizedBox(
+      width: 20,
+      height: 20,
+      child: AnimatedBuilder(
+        animation: _c,
+        child: circle,
+        builder: (BuildContext context, Widget? child) {
+          final double t = _c.value.clamp(0.0, 1.0);
+          final double scale = 0.6 + 0.4 * T0Motion.standard.transform(t);
+          return Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              // 外环画在 20×20 盒外（1.6 倍），不参与布局
+              if (t < 1)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: _StepRingPainter(t: t, color: pal.accent),
+                    ),
+                  ),
+                ),
+              Transform.scale(scale: scale, child: child),
+            ],
+          );
+        },
+      ),
+    );
   }
+}
+
+/// 步骤连接线：轨道 + 按 progress 从左展开的填充（240ms standard）。
+///
+/// 一个 painter 画两笔矩形，1px 线上不会出现两层叠加的半透明行。
+class _StepLinePainter extends CustomPainter {
+  const _StepLinePainter({
+    required this.progress,
+    required this.track,
+    required this.fill,
+  });
+
+  final double progress;
+  final Color track;
+  final Color fill;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Rect trackRect = Offset.zero & size;
+    // 两端（0 / 1）只画一笔：不然同一块 1px 矩形被两种颜色各叠一次，
+    // 在亚像素位置会留下「两层半透明」的行，和改造前的像素对不上。
+    if (progress >= 1) {
+      canvas.drawRect(trackRect, Paint()..color = fill);
+      return;
+    }
+    canvas.drawRect(trackRect, Paint()..color = track);
+    if (progress <= 0) return;
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width * progress, size.height),
+      Paint()..color = fill,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _StepLinePainter oldDelegate) =>
+      oldDelegate.progress != progress ||
+      oldDelegate.track != track ||
+      oldDelegate.fill != fill;
+}
+
+/// 一次性外环：半径 1→1.6 倍、透明度 1→0。
+class _StepRingPainter extends CustomPainter {
+  const _StepRingPainter({required this.t, required this.color});
+
+  final double t;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double radius = (size.shortestSide / 2 - 0.6) * (1 + 0.6 * t);
+    final Paint paint = Paint()
+      ..color = color.withValues(alpha: (1 - t) * 0.8)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..isAntiAlias = true;
+    canvas.drawCircle(size.center(Offset.zero), radius, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _StepRingPainter oldDelegate) =>
+      oldDelegate.t != t || oldDelegate.color != color;
 }
 
 // ------------------------------------------------------------------ 页头
@@ -837,7 +989,29 @@ class FlowHead extends StatelessWidget {
       children: <Widget>[
         SectionLabel(text: eyebrow),
         const SizedBox(height: 14),
-        Text(title, style: context.tH1),
+        // 标题切换：fade + 上移 4px（4 / 42 是 h1 行高的比例，随缩放等比），200ms。
+        // 位置不变、排版不变 —— AnimatedSwitcher 只换里面的 Text。
+        AnimatedSwitcher(
+          duration: T0Motion.dur(context, T0Motion.title),
+          switchInCurve: T0Motion.enter,
+          switchOutCurve: T0Motion.exit,
+          layoutBuilder: (Widget? current, List<Widget> previous) => Stack(
+            alignment: Alignment.centerLeft,
+            children: <Widget>[...previous, ?current],
+          ),
+          transitionBuilder: (Widget child, Animation<double> animation) =>
+              FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 4 / 42),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
+          child: Text(title, key: ValueKey<String>(title), style: context.tH1),
+        ),
       ],
     );
 
@@ -1052,21 +1226,80 @@ class _HelpRow extends StatelessWidget {
 
 OverlayEntry? _toastEntry;
 
-/// 底部居中轻提示。
+/// 底部居中轻提示：从底部上滑 8px + fade 进（200ms），停留 2.4s，淡出 200ms。
 void showT0Toast(BuildContext context, String message) {
   if (_toastEntry != null && _toastEntry!.mounted) {
     _toastEntry!.remove();
   }
   final OverlayState overlay = Overlay.of(context, rootOverlay: true);
-  final OverlayEntry entry = OverlayEntry(
-    builder: (BuildContext context) {
-      final T0Palette pal = context.pal;
-      return Positioned(
-        left: 16,
-        right: 16,
-        bottom: 36,
-        child: IgnorePointer(
-          child: Center(
+  late final OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (BuildContext context) => _ToastLayer(
+      message: message,
+      onDone: () {
+        if (entry.mounted) entry.remove();
+        if (identical(_toastEntry, entry)) {
+          _toastEntry = null;
+        }
+      },
+    ),
+  );
+  _toastEntry = entry;
+  overlay.insert(entry);
+}
+
+class _ToastLayer extends StatefulWidget {
+  const _ToastLayer({required this.message, required this.onDone});
+
+  final String message;
+  final VoidCallback onDone;
+
+  @override
+  State<_ToastLayer> createState() => _ToastLayerState();
+}
+
+class _ToastLayerState extends State<_ToastLayer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: T0Motion.toast,
+  );
+  Timer? _hold;
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    _c.duration = T0Motion.dur(context, T0Motion.toast);
+    _c.forward();
+    _hold = Timer(T0Motion.toastHold, () {
+      if (!mounted) return;
+      _c.reverse().then((_) {
+        if (mounted) widget.onDone();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _hold?.cancel();
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final T0Palette pal = context.pal;
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 36,
+      child: IgnorePointer(
+        child: Center(
+          child: AnimatedBuilder(
+            animation: _c,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               decoration: BoxDecoration(
@@ -1075,7 +1308,7 @@ void showT0Toast(BuildContext context, String message) {
                 boxShadow: pal.floatShadow,
               ),
               child: Text(
-                message,
+                widget.message,
                 style: TextStyle(
                   fontFamily: T0.sansFamily,
                   fontFamilyFallback: T0.sansFallback,
@@ -1085,19 +1318,19 @@ void showT0Toast(BuildContext context, String message) {
                 ),
               ),
             ),
+            builder: (BuildContext context, Widget? child) {
+              final double t = T0Motion.standard.transform(_c.value.clamp(0.0, 1.0));
+              return Opacity(
+                opacity: t,
+                child: Transform.translate(
+                  offset: Offset(0, 8 * (1 - t)),
+                  child: child,
+                ),
+              );
+            },
           ),
         ),
-      );
-    },
-  );
-  _toastEntry = entry;
-  overlay.insert(entry);
-  Future<void>.delayed(const Duration(milliseconds: 2400), () {
-    if (entry.mounted) {
-      entry.remove();
-    }
-    if (identical(_toastEntry, entry)) {
-      _toastEntry = null;
-    }
-  });
+      ),
+    );
+  }
 }

@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../../models/mock_data.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/motion.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/ghost_button.dart';
+import '../../widgets/motion_bits.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/status_dot.dart';
 
@@ -80,6 +82,56 @@ class _WorkspacePageState extends State<WorkspacePage> {
   /// 窄屏模块胶囊行的横向滚动位置：滚到最右后不再显示右侧渐隐
   final ScrollController _stripScroll = ScrollController();
   bool _stripAtEnd = false;
+
+  // ------------------------------------------------- 左栏高亮条（G7）
+  //
+  // 高亮条是「一块在主栏之上滑动的面」，不是每行自己变色：所以先量出当前
+  // 选中行的矩形（GlobalKey + localToGlobal，相对 Stack），再交给
+  // AnimatedPositioned 滑过去。量到的矩形只在变化时 setState，不会每帧回写。
+  final GlobalKey _railStackKey = GlobalKey();
+  final Map<int, GlobalKey> _railKeys = <int, GlobalKey>{};
+  final Map<int, Rect> _railRects = <int, Rect>{};
+  bool _railMeasureScheduled = false;
+
+  /// 「前后对比」按钮：弹层缩放的原点用它量（G7）
+  final GlobalKey _compareButtonKey = GlobalKey(debugLabel: 'compare-open');
+
+  GlobalKey _railKey(int id) =>
+      _railKeys.putIfAbsent(id, () => GlobalKey(debugLabel: 'rail-$id'));
+
+  void _scheduleRailMeasure() {
+    if (_railMeasureScheduled) return;
+    _railMeasureScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _railMeasureScheduled = false;
+      if (!mounted) return;
+      final RenderObject? stack = _railStackKey.currentContext?.findRenderObject();
+      if (stack is! RenderBox) return;
+      final Map<int, Rect> next = <int, Rect>{};
+      for (final int id in _store.order.value) {
+        final RenderObject? box = _railKeys[id]?.currentContext?.findRenderObject();
+        if (box is! RenderBox || !box.hasSize) continue;
+        next[id] = box.localToGlobal(Offset.zero, ancestor: stack) & box.size;
+      }
+      if (next.isEmpty) return;
+      bool changed = next.length != _railRects.length;
+      if (!changed) {
+        for (final MapEntry<int, Rect> entry in next.entries) {
+          if (_railRects[entry.key] != entry.value) {
+            changed = true;
+            break;
+          }
+        }
+      }
+      if (changed) {
+        setState(() {
+          _railRects
+            ..clear()
+            ..addAll(next);
+        });
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -165,6 +217,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
 
   // ------------------------------------------------------------ 左栏
   Widget _rail(BuildContext context) {
+    // 量一次高亮条该落在哪一行（post-frame；量到的值真的变了才 setState）
+    _scheduleRailMeasure();
     return Container(
       color: context.pal.surface,
       child: Column(
@@ -202,17 +256,43 @@ class _WorkspacePageState extends State<WorkspacePage> {
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-              child: Column(
+              child: Stack(
+                key: _railStackKey,
                 children: <Widget>[
-                  for (final int id in _store.order.value)
-                    _RailItem(
-                      module: _store.moduleOf(id),
-                      status: _store.statusOf(id),
-                      active: id == _activeId,
-                      pagesText:
-                          '${_store.moduleOf(id).pages} 页 · ${_store.statusOf(id).label}',
-                      onTap: () => _store.setActiveModule(id),
+                  // 高亮条：位置 / 长度变化 240ms standard 滑到新项（不再瞬切）
+                  if (_railRects[_activeId] case final Rect rect)
+                    AnimatedPositioned(
+                      duration: T0Motion.dur(context, T0Motion.base),
+                      curve: T0Motion.standard,
+                      left: 0,
+                      right: 0,
+                      top: rect.top,
+                      height: rect.height,
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: context.pal.surface,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: context.pal.line),
+                            boxShadow: context.pal.softShadow,
+                          ),
+                        ),
+                      ),
                     ),
+                  Column(
+                    children: <Widget>[
+                      for (final int id in _store.order.value)
+                        _RailItem(
+                          boxKey: _railKey(id),
+                          module: _store.moduleOf(id),
+                          status: _store.statusOf(id),
+                          active: id == _activeId,
+                          pagesText:
+                              '${_store.moduleOf(id).pages} 页 · ${_store.statusOf(id).label}',
+                          onTap: () => _store.setActiveModule(id),
+                        ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -390,22 +470,45 @@ class _WorkspacePageState extends State<WorkspacePage> {
                     },
                   ),
                 ),
-                if (_showingBefore)
-                  Positioned(
-                    // top: 0 + 16px 高的胶囊：画布顶部内边距 28px，胶囊底边落在 16px，
-                    // 与封面卡上边框留出 12px 间隙（审图 P2-⑤：原来 top:14 高度 26 压在卡上）
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: IgnorePointer(
-                      child: Center(child: _HoldHint()),
+                // 提示条「正在看修改前」：出现 120ms fade + 高度展开（收起反着来）
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: IgnorePointer(
+                    child: Center(
+                      child: AnimatedSwitcher(
+                        duration: T0Motion.dur(context, T0Motion.hint),
+                        switchInCurve: T0Motion.standard,
+                        switchOutCurve: T0Motion.exit,
+                        transitionBuilder: (
+                          Widget child,
+                          Animation<double> animation,
+                        ) =>
+                            FadeTransition(
+                          opacity: animation,
+                          child: SizeTransition(
+                            sizeFactor: animation,
+                            axisAlignment: -1,
+                            child: child,
+                          ),
+                        ),
+                        child: _showingBefore
+                            ? const _HoldHint(key: ValueKey<String>('hold-hint'))
+                            : const SizedBox(
+                                key: ValueKey<String>('hold-hint-off'),
+                                width: 0,
+                                height: 0,
+                              ),
+                      ),
                     ),
                   ),
+                ),
                 if (_loading)
                   Positioned.fill(
-                    child: Container(
-                      color: context.pal.bg.withValues(alpha: 0.78),
-                      alignment: Alignment.center,
+                    // 骨架 shimmer：斜向高光带 1.2s 循环横扫；底色是最浅的纸色 surface
+                    child: _CanvasSkeleton(
+                      zoom: _store.zoom.value,
                       child: Container(
                         padding: const EdgeInsets.all(26),
                         decoration: BoxDecoration(
@@ -543,6 +646,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
       ),
       const SizedBox(width: 8),
       SecondaryButton(
+        key: _compareButtonKey,
         label: '前后对比',
         dense: true,
         onPressed: () => _openCompare(context),
@@ -664,9 +768,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
           width: 720,
           height: 405,
           child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 150),
-            switchInCurve: Curves.easeOut,
-            switchOutCurve: Curves.easeIn,
+            duration: T0Motion.dur(context, T0Motion.fast),
+            switchInCurve: T0Motion.standard,
+            switchOutCurve: T0Motion.exit,
             // 默认 layoutBuilder 用 Stack(loose) 会让幻灯片按内容收缩；
             // 这里强制 expand，过渡期间新旧两页都保持 720×405 的排版
             layoutBuilder: (Widget? current, List<Widget> previous) => Stack(
@@ -676,6 +780,24 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 ?current,
               ],
             ),
+            // 新内容额外做一次轻微上移 4px→0（720 宽版面坐标，屏幕上按缩放等比），不做放大
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              final CurvedAnimation curved = CurvedAnimation(
+                parent: animation,
+                curve: T0Motion.standard,
+                reverseCurve: T0Motion.exit,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 4 / 405),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: child,
+                ),
+              );
+            },
             child: KeyedSubtree(
               key: ValueKey<bool>(version2),
               child: slide,
@@ -1088,10 +1210,14 @@ class _WorkspacePageState extends State<WorkspacePage> {
 
   // ------------------------------------------------------------ 对比
   Future<void> _openCompare(BuildContext context) {
-    return showDialog<void>(
-      context: context,
-      barrierColor: context.pal.scrim.withValues(alpha: 0.4),
-      builder: (BuildContext context) => Dialog(
+    // 从「前后对比」按钮位置锚点弹出：scale 0.94→1 + fade，220ms enter / 160ms exit
+    return Navigator.of(context).push<void>(
+      t0DialogRoute<void>(
+        context: context,
+        barrierLabel: '前后对比',
+        scaleFrom: 0.94,
+        alignment: _compareOrigin(context),
+        builder: (BuildContext context) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: PaperCard(
@@ -1131,15 +1257,25 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 // 整组比内容区短 52px，右侧多出 77px 留白）
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints box) {
-                    final Widget before = _CompareBox(
-                      label: '修改前',
-                      version: '版本 1',
-                      child: _compareSlide(context, before: true),
+                    final Widget before = T0Enter(
+                      duration: T0Motion.dialogIn,
+                      offset: const Offset(12, 0),
+                      child: _CompareBox(
+                        label: '修改前',
+                        version: '版本 1',
+                        child: _compareSlide(context, before: true),
+                      ),
                     );
-                    final Widget after = _CompareBox(
-                      label: '修改后',
-                      version: '版本 2',
-                      child: _compareSlide(context, before: false),
+                    // 右页晚 40ms 进场，两页各带 +12px 横向位移
+                    final Widget after = T0Enter(
+                      delay: T0Motion.staggerComparePane,
+                      duration: T0Motion.dialogIn,
+                      offset: const Offset(12, 0),
+                      child: _CompareBox(
+                        label: '修改后',
+                        version: '版本 2',
+                        child: _compareSlide(context, before: false),
+                      ),
                     );
                     // 窄屏放不下并排两栏时竖排，避免各栏被压到 200px 以下
                     if (box.maxWidth < 700) {
@@ -1192,6 +1328,20 @@ class _WorkspacePageState extends State<WorkspacePage> {
           ),
         ),
       ),
+      ),
+    );
+  }
+
+  /// 弹层缩放的锚点：「前后对比」按钮在屏幕上的相对位置（−1..1）。
+  /// 量不到按钮（例如窄屏的图标入口）就退回居中。
+  Alignment _compareOrigin(BuildContext context) {
+    final RenderObject? box = _compareButtonKey.currentContext?.findRenderObject();
+    final Size screen = MediaQuery.sizeOf(context);
+    if (box is! RenderBox || !box.hasSize || screen.isEmpty) return Alignment.center;
+    final Offset center = box.localToGlobal(box.size.center(Offset.zero));
+    return Alignment(
+      (center.dx / screen.width * 2 - 1).clamp(-1.0, 1.0),
+      (center.dy / screen.height * 2 - 1).clamp(-1.0, 1.0),
     );
   }
 
@@ -1569,6 +1719,7 @@ class _RailItem extends StatelessWidget {
     required this.active,
     required this.pagesText,
     required this.onTap,
+    this.boxKey,
   });
 
   final ProjectModule module;
@@ -1576,6 +1727,9 @@ class _RailItem extends StatelessWidget {
   final bool active;
   final String pagesText;
   final VoidCallback onTap;
+
+  /// 给高亮条量尺用的 key（量的是这块 Container，不含上下间距）
+  final Key? boxKey;
 
   @override
   Widget build(BuildContext context) {
@@ -1587,12 +1741,13 @@ class _RailItem extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Container(
+            key: boxKey,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: active ? context.pal.surface : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: active ? context.pal.line : Colors.transparent),
-              boxShadow: active ? context.pal.softShadow : null,
+              // 透明描边不是装饰：它和原来一样占 1px 内边距，
+              // 选中行的高亮改由上面那条滑动的面来画。去掉这行会让每行矮 2px、窄 2px。
+              border: Border.all(color: Colors.transparent),
             ),
             child: Row(
               children: <Widget>[
@@ -1749,7 +1904,7 @@ class _HoldCompareState extends State<_HoldCompare> {
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         child: AnimatedContainer(
-          duration: context.anim(const Duration(milliseconds: 120)),
+          duration: T0Motion.dur(context, T0Motion.hint),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: widget.active ? context.pal.ink : context.pal.bg,
@@ -1787,7 +1942,7 @@ class _HoldCompareState extends State<_HoldCompare> {
 /// 按住期间画布上方的一行提示：不遮挡内容、不接指针，
 /// 只说明「现在看的是修改前」，与「前后对比」的弹层区分开。
 class _HoldHint extends StatelessWidget {
-  const _HoldHint();
+  const _HoldHint({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -1907,7 +2062,7 @@ class _PromptChipState extends State<_PromptChip> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
-          duration: context.anim(const Duration(milliseconds: 120)),
+          duration: T0Motion.dur(context, T0Motion.hint),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: _hover ? context.pal.accentSoft : context.pal.surface,
@@ -1985,4 +2140,109 @@ class _CompareBox extends StatelessWidget {
       ],
     );
   }
+}
+
+/// 生成中的画布骨架：两张与真实幻灯片同尺寸的纸板 + 斜向高光带。
+///
+/// 底色用 palette 里最浅的纸色（surface），条块用 canvas —— 不用灰。
+/// 高光带由 [T0ShimmerBand] 一帧一画，骨架本身不重建。
+class _CanvasSkeleton extends StatelessWidget {
+  const _CanvasSkeleton({required this.zoom, required this.child});
+
+  final double zoom;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final T0Palette pal = context.pal;
+    final double width = 720 * zoom;
+    final double height = 405 * zoom;
+    return ColoredBox(
+      color: pal.bg.withValues(alpha: 0.78),
+      child: Stack(
+        children: <Widget>[
+          Positioned.fill(
+            child: SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(vertical: 28),
+              child: Column(
+                children: <Widget>[
+                  T0ShimmerBand(
+                    child: _SkeletonSlide(
+                      zoom: zoom,
+                      width: width,
+                      height: height,
+                      rows: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  T0ShimmerBand(
+                    child: _SkeletonSlide(
+                      zoom: zoom,
+                      width: width,
+                      height: height,
+                      rows: 3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Center(child: child),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkeletonSlide extends StatelessWidget {
+  const _SkeletonSlide({
+    required this.zoom,
+    required this.width,
+    required this.height,
+    required this.rows,
+  });
+
+  final double zoom;
+  final double width;
+  final double height;
+  final int rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final T0Palette pal = context.pal;
+    return Container(
+      width: width,
+      height: height,
+      padding: EdgeInsets.all(28 * zoom),
+      decoration: BoxDecoration(
+        color: pal.surface,
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _bar(pal, width * 0.22, 8 * zoom),
+          SizedBox(height: 14 * zoom),
+          _bar(pal, width * 0.56, 18 * zoom),
+          SizedBox(height: 8 * zoom),
+          _bar(pal, width * 0.40, 18 * zoom),
+          const Spacer(),
+          for (int i = 0; i < rows; i++) ...<Widget>[
+            _bar(pal, width * (0.72 - i * 0.08), 6 * zoom),
+            SizedBox(height: 8 * zoom),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _bar(T0Palette pal, double width, double height) => Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: pal.canvas,
+          borderRadius: BorderRadius.circular(3),
+        ),
+      );
 }
