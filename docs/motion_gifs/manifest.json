@@ -1,0 +1,50 @@
+{
+  "view": [
+    1440,
+    900
+  ],
+  "captures": [
+    {
+      "name": "01_workbench_cards",
+      "slow_factor": 6.0,
+      "window_ms": 3819.1,
+      "frames": 39,
+      "real_ms": 636.5
+    },
+    {
+      "name": "02_workspace_crossfade",
+      "slow_factor": 16.0,
+      "window_ms": 2980.4,
+      "frames": 20,
+      "real_ms": 186.3
+    },
+    {
+      "name": "03_compare_dialog",
+      "slow_factor": 10.0,
+      "window_ms": 2665.5,
+      "frames": 14,
+      "real_ms": 266.5
+    },
+    {
+      "name": "04_delivery_check",
+      "slow_factor": 6.0,
+      "window_ms": 10005.4,
+      "frames": 97,
+      "real_ms": 1667.6
+    }
+  ],
+  "stills_drift_pixels_reduced_motion": {
+    "workbench_1440x900.png": 0,
+    "intake_1440x900.png": 0,
+    "outline_1440x900.png": 0,
+    "modules_1440x900.png": 0,
+    "workspace_1440x900.png": 0,
+    "delivery_1440x900.png": 0,
+    "workbench_500x900.png": 0,
+    "intake_500x900.png": 0,
+    "outline_500x900.png": 0,
+    "modules_500x900.png": 0,
+    "workspace_500x900.png": 0,
+    "delivery_500x900.png": 0
+  }
+}
