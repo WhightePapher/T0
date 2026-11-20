@@ -1,0 +1,8 @@
+exe 内嵌图标（PrivateExtractIcons，lab5_crossplatformvisualdesignpractice.exe）
+   16px  主体 14x12 占高 75% 留白 左1/右1
+   24px  主体 18x16 占高 67% 留白 左3/右3
+   32px  主体 26x22 占高 69% 留白 左3/右3
+   48px  主体 36x32 占高 67% 留白 左6/右6
+   64px  主体 50x44 占高 69% 留白 左7/右7
+  128px  主体 100x88 占高 69% 留白 左14/右14
+  256px  主体 202x178 占高 70% 留白 左27/右27
