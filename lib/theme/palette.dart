@@ -596,8 +596,15 @@ class T0Palette extends ThemeExtension<T0Palette> {
 extension T0PaletteContext on BuildContext {
   T0Palette get pal => T0Palette.of(this);
 
-  /// 组件自身过渡时长的安全版本：主题渐变进行中直接归零。
-  /// 否则 AnimatedContainer 会去追一个每帧都在变的目标色，颜色永远慢半拍，
-  /// 过渡末尾「底色已经深了、控件还停在中间灰」。
-  Duration anim(Duration base) => pal.transitioning ? Duration.zero : base;
+  /// 组件自身过渡时长的安全版本：两件事都在这里归零。
+  ///
+  /// 1. 主题渐变进行中直接归零 —— 否则 AnimatedContainer 会去追一个每帧都在变的
+  ///    目标色，颜色永远慢半拍，过渡末尾「底色已经深了、控件还停在中间灰」。
+  /// 2. `MediaQuery.disableAnimations`（系统「减弱动效」）为真时归零 ——
+  ///    改在这一处，全项目所有 `context.anim(...)` / `T0Motion.dur(...)` 一起生效。
+  Duration anim(Duration base) {
+    if (pal.transitioning) return Duration.zero;
+    if (MediaQuery.maybeDisableAnimationsOf(this) ?? false) return Duration.zero;
+    return base;
+  }
 }
