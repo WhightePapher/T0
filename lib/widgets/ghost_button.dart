@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/motion.dart';
 import '../theme/palette.dart';
 import '../theme/tokens.dart';
+import 'focus_ring.dart';
 
 /// 描边胶囊次要按钮（上一步、新增章节、导出当前范围…）。
 class SecondaryButton extends StatefulWidget {
@@ -49,7 +50,7 @@ class _SecondaryButtonState extends State<SecondaryButton> {
         ? pal.bg
         : pal.surface;
 
-    return MouseRegion(
+    final Widget button = MouseRegion(
       cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() {
@@ -74,6 +75,8 @@ class _SecondaryButtonState extends State<SecondaryButton> {
           child: AnimatedContainer(
             duration: T0Motion.dur(context, T0Motion.fast),
             curve: Curves.easeOut,
+            // hover 抬升 1px（B2），与主按钮同一套几何
+            transform: Matrix4.translationValues(0, _hover && enabled ? -1 : 0, 0),
             width: widget.expand ? double.infinity : null,
             padding: EdgeInsets.symmetric(
               horizontal: widget.dense ? 14 : 20,
@@ -83,6 +86,8 @@ class _SecondaryButtonState extends State<SecondaryButton> {
               color: background,
               borderRadius: BorderRadius.circular(T0.pillRadius),
               border: Border.all(color: borderColor),
+              // hover 时补一层和主按钮同源的阴影（B1/B2）
+              boxShadow: _hover && enabled ? pal.floatShadowHover : null,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -110,6 +115,12 @@ class _SecondaryButtonState extends State<SecondaryButton> {
           ),
         ),
       ),
+    );
+    return T0FocusRing(
+      radius: T0.pillRadius,
+      enabled: enabled,
+      onActivate: widget.onPressed,
+      child: button,
     );
   }
 }
@@ -141,7 +152,7 @@ class _GhostButtonState extends State<GhostButton> {
   Widget build(BuildContext context) {
     final T0Palette pal = context.pal;
     final bool enabled = widget.onPressed != null;
-    return MouseRegion(
+    final Widget button = MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() {
@@ -177,6 +188,12 @@ class _GhostButtonState extends State<GhostButton> {
           ),
         ),
       ),
+    );
+    return T0FocusRing(
+      radius: T0.innerRadius,
+      enabled: enabled,
+      onActivate: widget.onPressed,
+      child: button,
     );
   }
 }

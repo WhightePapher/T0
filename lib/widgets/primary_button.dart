@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/motion.dart';
 import '../theme/palette.dart';
 import '../theme/tokens.dart';
+import 'focus_ring.dart';
 
 /// 胶囊主按钮，自己做 hover / pressed / disabled 三态。
 class PrimaryButton extends StatefulWidget {
@@ -46,7 +47,7 @@ class _PrimaryButtonState extends State<PrimaryButton> {
     // 白字压浅绿 2.4:1 / 黑字压深绿 3.7:1，两种都不达标
     final Color foreground = enabled ? T0Palette.onFill(background) : pal.muted;
 
-    return MouseRegion(
+    final Widget button = MouseRegion(
       cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() {
@@ -71,6 +72,8 @@ class _PrimaryButtonState extends State<PrimaryButton> {
           child: AnimatedContainer(
             duration: T0Motion.dur(context, T0Motion.fast),
             curve: Curves.easeOut,
+            // hover 抬升 1px（B2）：只动绘制层，命中区 / 布局位置不变
+            transform: Matrix4.translationValues(0, _hover && enabled ? -1 : 0, 0),
             width: widget.expand ? double.infinity : null,
             padding: EdgeInsets.symmetric(
               horizontal: widget.dense ? 18 : 26,
@@ -79,7 +82,7 @@ class _PrimaryButtonState extends State<PrimaryButton> {
             decoration: BoxDecoration(
               color: background,
               borderRadius: BorderRadius.circular(T0.pillRadius),
-              boxShadow: enabled && _hover ? pal.floatShadow : null,
+              boxShadow: enabled && _hover ? pal.floatShadowHover : null,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -111,6 +114,13 @@ class _PrimaryButtonState extends State<PrimaryButton> {
           ),
         ),
       ),
+    );
+    // 键盘焦点（B4）：T0FocusRing 只加一层前景画笔，不改任何几何
+    return T0FocusRing(
+      radius: T0.pillRadius,
+      enabled: enabled,
+      onActivate: widget.onPressed,
+      child: button,
     );
   }
 }

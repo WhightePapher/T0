@@ -257,10 +257,53 @@ class T0Palette extends ThemeExtension<T0Palette> {
   /// 色相不变；**不要**拿它替换全局 muted / stepMuted，那批配对是另一套底。
   Color get mutedOnTint => Color.lerp(muted, ink, 0.15)!;
 
-  /// 浮起卡片阴影（6 处复用，保持既有几何参数）
-  List<BoxShadow> get floatShadow => <BoxShadow>[
-    BoxShadow(color: shadow, blurRadius: 60, offset: const Offset(0, 18)),
-  ];
+  /// 当前底色算不算「深底」：按亮度判，不看主题名 —— 主题过渡中间态也能用。
+  bool get isDarkSurface => bg.computeLuminance() < 0.2;
+
+  /// 浮起卡片的阴影：**两层**（key light + ambient，B1）。
+  ///
+  /// * key light：18px / (0, 2)，贴近卡面，画边缘；
+  /// * ambient：48px / (0, 18)，拉开与底面的距离。
+  /// 两层都从 `shadow` 的 alpha 派生（不新增颜色值），合起来比原来那层
+  /// 60px 更「有体积」，边缘却不发灰。
+  ///
+  /// 深色主题：影子压深底上看不见，换成 1px 提亮描边（0 模糊 + 1px 扩散，
+  /// 不占布局、不改各调用点的 Border）。
+  List<BoxShadow> get floatShadow => isDarkSurface
+      ? <BoxShadow>[
+          BoxShadow(color: lineStrong.withValues(alpha: 0.9), blurRadius: 0, spreadRadius: 1),
+        ]
+      : <BoxShadow>[
+          BoxShadow(
+            color: shadow.withValues(alpha: shadow.a * 0.62),
+            blurRadius: 18,
+            offset: const Offset(0, 2),
+          ),
+          BoxShadow(
+            color: shadow.withValues(alpha: shadow.a * 0.45),
+            blurRadius: 48,
+            offset: const Offset(0, 18),
+          ),
+        ];
+
+  /// hover 态：同一个几何形状，提亮 / 加深一档（B2 的「阴影加深」）
+  List<BoxShadow> get floatShadowHover => isDarkSurface
+      ? <BoxShadow>[
+          BoxShadow(color: lineStrong, blurRadius: 0, spreadRadius: 1),
+          BoxShadow(color: lilac.withValues(alpha: 0.28), blurRadius: 10, spreadRadius: 1),
+        ]
+      : <BoxShadow>[
+          BoxShadow(
+            color: shadow.withValues(alpha: shadow.a * 0.80),
+            blurRadius: 18,
+            offset: const Offset(0, 3),
+          ),
+          BoxShadow(
+            color: shadow.withValues(alpha: shadow.a * 0.60),
+            blurRadius: 54,
+            offset: const Offset(0, 22),
+          ),
+        ];
 
   /// 选中行阴影
   List<BoxShadow> get softShadow => <BoxShadow>[

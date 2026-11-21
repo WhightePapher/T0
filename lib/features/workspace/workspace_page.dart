@@ -9,6 +9,7 @@ import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/ghost_button.dart';
+import '../../widgets/focus_ring.dart';
 import '../../widgets/motion_bits.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/status_dot.dart';
@@ -255,6 +256,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
           const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
+              // 滚动统一口径（B7）：桌面 Clamping / 窄屏 Bouncing
+              physics: t0ScrollPhysics(context),
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
               child: Stack(
                 key: _railStackKey,
@@ -341,6 +344,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
           Positioned.fill(
             child: ListView(
               controller: _stripScroll,
+              physics: t0ScrollPhysics(context),
               scrollDirection: Axis.horizontal,
               // 右侧多留 4px：滚到最右时最后一个胶囊不再顶到屏幕边
               padding: const EdgeInsets.fromLTRB(12, 11, 16, 11),
@@ -441,10 +445,12 @@ class _WorkspacePageState extends State<WorkspacePage> {
                         (box.maxWidth - slideWidth) / 2,
                       );
                       return SingleChildScrollView(
+                        physics: t0ScrollPhysics(context),
                         // 底部多留一条页脚的高度（≈72）：滚到底时白页最后一行
                         // 不会被「模块目标」信息条压着切半
                         padding: EdgeInsets.only(top: pad, bottom: pad + 72),
                         child: SingleChildScrollView(
+                          physics: t0ScrollPhysics(context),
                           scrollDirection: Axis.horizontal,
                           padding: EdgeInsets.symmetric(horizontal: side),
                           child: Column(
@@ -1554,6 +1560,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
           const Divider(height: 1),
           Expanded(
             child: ListView(
+              physics: t0ScrollPhysics(context),
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               children: <Widget>[
                 for (final _Message message in _thread) ...<Widget>[
@@ -1867,8 +1874,9 @@ class _IconSquareState extends State<_IconSquare> {
         ),
       ),
     );
-    if (widget.tooltip == null) return button;
-    return Tooltip(message: widget.tooltip!, child: button);
+    final Widget ringed = T0FocusRing(radius: 8, onActivate: widget.onTap, child: button);
+    if (widget.tooltip == null) return ringed;
+    return Tooltip(message: widget.tooltip!, child: ringed);
   }
 }
 
@@ -2167,22 +2175,18 @@ class _CanvasSkeleton extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 28),
               child: Column(
                 children: <Widget>[
-                  T0ShimmerBand(
-                    child: _SkeletonSlide(
-                      zoom: zoom,
-                      width: width,
-                      height: height,
-                      rows: 0,
-                    ),
+                  _SkeletonSlide(
+                    zoom: zoom,
+                    width: width,
+                    height: height,
+                    rows: 0,
                   ),
                   const SizedBox(height: 20),
-                  T0ShimmerBand(
-                    child: _SkeletonSlide(
-                      zoom: zoom,
-                      width: width,
-                      height: height,
-                      rows: 3,
-                    ),
+                  _SkeletonSlide(
+                    zoom: zoom,
+                    width: width,
+                    height: height,
+                    rows: 3,
                   ),
                 ],
               ),
@@ -2211,6 +2215,30 @@ class _SkeletonSlide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final T0Palette pal = context.pal;
+    // 条块分两档（B5）：标题短（0.22/0.40）、正文长（0.72~0.56）。
+    // 两条 shimmer 的盒子宽度差 2~3 倍，同一个 1.2s 周期下横扫速度
+    // （px/s = 3 × 盒宽 / 周期）自然与条块宽度成正比 —— 长条扫得快，
+    // 短条扫得慢，视觉上像同一道光从上往下走过，而不是几条各自闪。
+    final Widget titleBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        _bar(pal, width * 0.22, 8 * zoom),
+        SizedBox(height: 14 * zoom),
+        _bar(pal, width * 0.40, 18 * zoom),
+      ],
+    );
+    final Widget bodyBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        // 封面骨架（rows == 0）也留一条长条：两档宽度的对比在两张板上都成立
+        for (int i = 0; i < (rows == 0 ? 1 : rows); i++) ...<Widget>[
+          _bar(pal, width * (0.72 - i * 0.08), 6 * zoom),
+          SizedBox(height: 8 * zoom),
+        ],
+      ],
+    );
     return Container(
       width: width,
       height: height,
@@ -2222,16 +2250,12 @@ class _SkeletonSlide extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _bar(pal, width * 0.22, 8 * zoom),
-          SizedBox(height: 14 * zoom),
-          _bar(pal, width * 0.56, 18 * zoom),
-          SizedBox(height: 8 * zoom),
-          _bar(pal, width * 0.40, 18 * zoom),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: T0ShimmerBand(child: titleBlock),
+          ),
           const Spacer(),
-          for (int i = 0; i < rows; i++) ...<Widget>[
-            _bar(pal, width * (0.72 - i * 0.08), 6 * zoom),
-            SizedBox(height: 8 * zoom),
-          ],
+          T0ShimmerBand(child: bodyBlock),
         ],
       ),
     );

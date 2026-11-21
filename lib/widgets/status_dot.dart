@@ -113,7 +113,8 @@ class _StatusDotState extends State<StatusDot> with TickerProviderStateMixin {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: widget.ring ? Colors.transparent : color,
-        border: widget.ring ? Border.all(color: color, width: 1.4) : null,
+        // 光学尺寸（B6）：空心点原来 1.4px 描边比实心点轻一档，提到 1.5 才同重量
+        border: widget.ring ? Border.all(color: color, width: 1.5) : null,
       ),
       child: done && !widget.ring
           ? AnimatedBuilder(
@@ -121,7 +122,8 @@ class _StatusDotState extends State<StatusDot> with TickerProviderStateMixin {
               builder: (BuildContext context, _) => T0CheckStroke(
                 progress: _check.value,
                 color: context.pal.surface,
-                strokeWidth: math.max(1.2, widget.size * 0.16),
+                // 勾线（B6）：小点里 1.2px 的勾视觉上会被描边吃掉，抬到 1.4
+                strokeWidth: math.max(1.4, widget.size * 0.16),
               ),
             )
           : null,
@@ -130,7 +132,8 @@ class _StatusDotState extends State<StatusDot> with TickerProviderStateMixin {
     if (breathing) {
       dot = AnimatedBuilder(
         animation: _breath,
-        child: dot,
+        // 呼吸只缩放这一个小圆：单独成层，父级列表不跟着重绘
+        child: RepaintBoundary(child: dot),
         builder: (BuildContext context, Widget? child) {
           // 只在绘制层放大，布局尺寸仍是 size
           final double t = Curves.easeInOut.transform(_breath.value);

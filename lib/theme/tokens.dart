@@ -174,6 +174,14 @@ class T0Metrics extends InheritedWidget {
   }
 }
 
+/// 表格数字：进度环中心、交付页百分比这类会 count-up 的数字用它，
+/// 字宽固定，数字从 3 数到 5 时不会把后面的百分号推来推去。
+const List<FontFeature> kT0TabularFigures = <FontFeature>[FontFeature.tabularFigures()];
+
+/// 滚动统一入口（B7）：桌面用 Clamping（不拖出回弹），窄屏 / 移动用 Bouncing。
+ScrollPhysics t0ScrollPhysics(BuildContext context) =>
+    context.metrics.isDesktop ? const ClampingScrollPhysics() : const BouncingScrollPhysics();
+
 /// 语义化文字样式，页面里用 `context.tH1` 这种写法。
 /// 字色都从当前（动画中间态的）[T0Palette] 取。
 extension T0TypeContext on BuildContext {

@@ -1,0 +1,75 @@
+{
+  "machine": {
+    "cpu": "AMD EPYC",
+    "cores": 4,
+    "chromium": "Chromium 154.0.8037.57 built on Debian GNU/Linux 13 (trixie)",
+    "flutter": "Flutter 3.50.0 • channel stable • https://github.com/flutter/flutter.git",
+    "viewport": [
+      500,
+      900
+    ]
+  },
+  "build_mode": "flutter build web --profile",
+  "metric": "requestAnimationFrame frame interval (FrameTiming not reported on web)",
+  "runs": 1,
+  "scenarios": {
+    "dialog": {
+      "cold_start_ms_runs": [
+        710.4
+      ],
+      "cold_start_ms_median": 710.4,
+      "frame_timing_supported": true,
+      "raf_samples": [
+        263
+      ],
+      "theme": {
+        "frames": 0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "fps_p50": 0.0,
+        "dropped_over_33ms": 0,
+        "over_50ms": 0,
+        "frame_timing_samples": 0,
+        "build_p50": 0.0,
+        "build_p95": 0.0,
+        "build_max": 0.0,
+        "raster_p50": 0.0,
+        "raster_p95": 0.0,
+        "raster_max": 0.0
+      },
+      "works": {
+        "frames": 0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "fps_p50": 0.0,
+        "dropped_over_33ms": 0,
+        "over_50ms": 0,
+        "frame_timing_samples": 0,
+        "build_p50": 0.0,
+        "build_p95": 0.0,
+        "build_max": 0.0,
+        "raster_p50": 0.0,
+        "raster_p95": 0.0,
+        "raster_max": 0.0
+      },
+      "dialog": {
+        "frames": 215,
+        "p50": 16.7,
+        "p95": 33.4,
+        "max": 133.3,
+        "fps_p50": 59.880239520958085,
+        "dropped_over_33ms": 76,
+        "over_50ms": 7,
+        "frame_timing_samples": 231,
+        "build_p50": 2.4,
+        "build_p95": 4.1,
+        "build_max": 17.9,
+        "raster_p50": 19,
+        "raster_p95": 33.5,
+        "raster_max": 127.5
+      }
+    }
+  }
+}

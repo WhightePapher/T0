@@ -49,7 +49,9 @@ Route<T> t0DialogRoute<T>({
         child: ScaleTransition(
           scale: Tween<double>(begin: scaleFrom, end: 1).animate(curved),
           alignment: alignment,
-          child: child,
+          // 弹层内容（两页 720×405）先栅格化成一层，scale 每帧只做合成。
+          // 不加这一层，SwiftShader 下每帧都要重画整块弹层（实测 raster p95 57ms）。
+          child: RepaintBoundary(child: child),
         ),
       );
     },
@@ -136,7 +138,9 @@ class _T0EnterState extends State<T0Enter> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _c,
-      child: widget.child,
+      // 子树单独成层：入场期间每帧变的只是 Opacity / Transform，
+      // 卡片本体（阴影 + 文字 + 缩略图）一次栅格化后复用，不跟着每帧重画。
+      child: RepaintBoundary(child: widget.child),
       builder: (BuildContext context, Widget? child) {
         final double t = widget.curve.transform(_c.value.clamp(0.0, 1.0));
         final Widget faded = Opacity(opacity: t, child: child);
@@ -290,7 +294,8 @@ class _T0CheckBadgeState extends State<T0CheckBadge>
           builder: (BuildContext context, _) => T0CheckStroke(
             progress: _c.value,
             color: pal.accent,
-            strokeWidth: math.max(1.6, widget.size * 0.1),
+            // 徽章勾线（B6）：与状态点、顶栏图标同一光重量，1.6 → 1.8
+            strokeWidth: math.max(1.8, widget.size * 0.1),
           ),
         ),
       ),
@@ -354,11 +359,14 @@ class _T0ShimmerBandState extends State<T0ShimmerBand>
         builder: (BuildContext context, Widget? child) => Stack(
           fit: StackFit.passthrough,
           children: <Widget>[
-            ?child,
+            // 骨架块不参与高光带的每帧重画：两层各自栅格化
+            ?(child == null ? null : RepaintBoundary(child: child)),
             Positioned.fill(
               child: IgnorePointer(
-                child: CustomPaint(
-                  painter: _BandPainter(progress: _c.value, color: highlight),
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    painter: _BandPainter(progress: _c.value, color: highlight),
+                  ),
                 ),
               ),
             ),
@@ -379,7 +387,9 @@ class _BandPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final double skew = size.height * 0.6;
     final double x = (-1 + 3 * progress) * size.width;
-    const double band = 150;
+    // 带子宽度跟着盒子走（原来固定 150px：窄盒子一眼是「整块闪」）。
+    // 下界 48px 保证高光在最小骨架上仍是「一条带」而不是一片。
+    final double band = (size.width * 0.22).clamp(48, 220);
     final Path path = Path()
       ..moveTo(x, size.height)
       ..lineTo(x + band, size.height)

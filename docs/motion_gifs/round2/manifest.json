@@ -1,0 +1,50 @@
+{
+  "view": [
+    1440,
+    900
+  ],
+  "captures": [
+    {
+      "name": "01_card_shadow_hover",
+      "file": "01_card_shadow_hover.gif",
+      "frames": 33,
+      "size": [
+        1000,
+        625
+      ],
+      "slow": 3.0,
+      "what": "卡片双层阴影 + hover 抬升 1px（工作台）"
+    },
+    {
+      "name": "02_focus_ring",
+      "file": "02_focus_ring.gif",
+      "frames": 10,
+      "size": [
+        1000,
+        625
+      ],
+      "what": "键盘 Tab：焦点环 2px / deckAccent / offset 2（工作区）"
+    },
+    {
+      "name": "03_skeleton_rhythm",
+      "file": "03_skeleton_rhythm.gif",
+      "frames": 79,
+      "size": [
+        1000,
+        625
+      ],
+      "slow": 1.5,
+      "what": "骨架：标题短条 + 正文长条，两条光带不同速度"
+    },
+    {
+      "name": "04_dialog_before_after",
+      "file": "04_dialog_before_after.gif",
+      "frames": 6,
+      "size": [
+        1280,
+        362
+      ],
+      "what": "对比弹层：左 feat/motion 构建，右 perf/round2 构建，按动画进度对齐"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/ghost_button.dart';
+import '../../widgets/focus_ring.dart';
 import '../../widgets/motion_bits.dart';
 import '../../widgets/primary_button.dart';
 
@@ -748,13 +749,17 @@ class _ChapterRowState extends State<_ChapterRow> {
       );
     }
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onToggle,
-        child: row,
+    return T0FocusRing(
+      radius: 10,
+      onActivate: widget.onToggle,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onToggle,
+          child: row,
+        ),
       ),
     );
   }

@@ -1,0 +1,265 @@
+{
+  "machine": {
+    "cpu": "AMD EPYC",
+    "cores": 4,
+    "chromium": "Chromium 154.0.8037.57 built on Debian GNU/Linux 13 (trixie)",
+    "flutter": "Flutter 3.50.0 • channel stable • https://github.com/flutter/flutter.git",
+    "viewport": [
+      1440,
+      900
+    ]
+  },
+  "build_mode": "flutter build web --profile",
+  "metric": "requestAnimationFrame frame interval (FrameTiming not reported on web)",
+  "runs": 3,
+  "scenarios": {
+    "cold": {
+      "cold_start_ms_runs": [
+        646.8,
+        393.2,
+        345.2
+      ],
+      "cold_start_ms_median": 393.2,
+      "frame_timing_supported": true,
+      "raf_samples": [
+        20,
+        25,
+        27
+      ],
+      "theme": {
+        "frames": 0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "fps_p50": 0.0,
+        "dropped_over_33ms": 0,
+        "over_50ms": 0,
+        "frame_timing_samples": 0,
+        "build_p50": 0.0,
+        "build_p95": 0.0,
+        "build_max": 0.0,
+        "raster_p50": 0.0,
+        "raster_p95": 0.0,
+        "raster_max": 0.0
+      },
+      "works": {
+        "frames": 0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "fps_p50": 0.0,
+        "dropped_over_33ms": 0,
+        "over_50ms": 0,
+        "frame_timing_samples": 0,
+        "build_p50": 0.0,
+        "build_p95": 0.0,
+        "build_max": 0.0,
+        "raster_p50": 0.0,
+        "raster_p95": 0.0,
+        "raster_max": 0.0
+      },
+      "dialog": {
+        "frames": 0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "fps_p50": 0.0,
+        "dropped_over_33ms": 0,
+        "over_50ms": 0,
+        "frame_timing_samples": 0,
+        "build_p50": 0.0,
+        "build_p95": 0.0,
+        "build_max": 0.0,
+        "raster_p50": 0.0,
+        "raster_p95": 0.0,
+        "raster_max": 0.0
+      }
+    },
+    "theme": {
+      "cold_start_ms_runs": [
+        287,
+        282.5,
+        296.1
+      ],
+      "cold_start_ms_median": 287,
+      "frame_timing_supported": true,
+      "raf_samples": [
+        155,
+        147,
+        160
+      ],
+      "theme": {
+        "frames": 261,
+        "p50": 33.3,
+        "p95": 33.4,
+        "max": 83.4,
+        "fps_p50": 30.030030030030034,
+        "dropped_over_33ms": 191,
+        "over_50ms": 10,
+        "frame_timing_samples": 279,
+        "build_p50": 8.8,
+        "build_p95": 12.9,
+        "build_max": 26,
+        "raster_p50": 17.8,
+        "raster_p95": 25.2,
+        "raster_max": 48.1
+      },
+      "works": {
+        "frames": 0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "fps_p50": 0.0,
+        "dropped_over_33ms": 0,
+        "over_50ms": 0,
+        "frame_timing_samples": 0,
+        "build_p50": 0.0,
+        "build_p95": 0.0,
+        "build_max": 0.0,
+        "raster_p50": 0.0,
+        "raster_p95": 0.0,
+        "raster_max": 0.0
+      },
+      "dialog": {
+        "frames": 0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "fps_p50": 0.0,
+        "dropped_over_33ms": 0,
+        "over_50ms": 0,
+        "frame_timing_samples": 0,
+        "build_p50": 0.0,
+        "build_p95": 0.0,
+        "build_max": 0.0,
+        "raster_p50": 0.0,
+        "raster_p95": 0.0,
+        "raster_max": 0.0
+      }
+    },
+    "works": {
+      "cold_start_ms_runs": [
+        261.9,
+        244.4,
+        222.1
+      ],
+      "cold_start_ms_median": 244.4,
+      "frame_timing_supported": true,
+      "raf_samples": [
+        353,
+        369,
+        395
+      ],
+      "theme": {
+        "frames": 0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "fps_p50": 0.0,
+        "dropped_over_33ms": 0,
+        "over_50ms": 0,
+        "frame_timing_samples": 0,
+        "build_p50": 0.0,
+        "build_p95": 0.0,
+        "build_max": 0.0,
+        "raster_p50": 0.0,
+        "raster_p95": 0.0,
+        "raster_max": 0.0
+      },
+      "works": {
+        "frames": 973,
+        "p50": 33.3,
+        "p95": 66.7,
+        "max": 116.7,
+        "fps_p50": 30.030030030030034,
+        "dropped_over_33ms": 570,
+        "over_50ms": 154,
+        "frame_timing_samples": 1064,
+        "build_p50": 2.8,
+        "build_p95": 9,
+        "build_max": 33.3,
+        "raster_p50": 19.6,
+        "raster_p95": 63.4,
+        "raster_max": 108.8
+      },
+      "dialog": {
+        "frames": 0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "fps_p50": 0.0,
+        "dropped_over_33ms": 0,
+        "over_50ms": 0,
+        "frame_timing_samples": 0,
+        "build_p50": 0.0,
+        "build_p95": 0.0,
+        "build_max": 0.0,
+        "raster_p50": 0.0,
+        "raster_p95": 0.0,
+        "raster_max": 0.0
+      }
+    },
+    "dialog": {
+      "cold_start_ms_runs": [
+        339.3,
+        234.4,
+        318.4
+      ],
+      "cold_start_ms_median": 318.4,
+      "frame_timing_supported": true,
+      "raf_samples": [
+        166,
+        173,
+        182
+      ],
+      "theme": {
+        "frames": 0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "fps_p50": 0.0,
+        "dropped_over_33ms": 0,
+        "over_50ms": 0,
+        "frame_timing_samples": 0,
+        "build_p50": 0.0,
+        "build_p95": 0.0,
+        "build_max": 0.0,
+        "raster_p50": 0.0,
+        "raster_p95": 0.0,
+        "raster_max": 0.0
+      },
+      "works": {
+        "frames": 0,
+        "p50": 0.0,
+        "p95": 0.0,
+        "max": 0.0,
+        "fps_p50": 0.0,
+        "dropped_over_33ms": 0,
+        "over_50ms": 0,
+        "frame_timing_samples": 0,
+        "build_p50": 0.0,
+        "build_p95": 0.0,
+        "build_max": 0.0,
+        "raster_p50": 0.0,
+        "raster_p95": 0.0,
+        "raster_max": 0.0
+      },
+      "dialog": {
+        "frames": 409,
+        "p50": 33.4,
+        "p95": 83.2,
+        "max": 116.7,
+        "fps_p50": 29.940119760479043,
+        "dropped_over_33ms": 302,
+        "over_50ms": 146,
+        "frame_timing_samples": 470,
+        "build_p50": 3,
+        "build_p95": 7.9,
+        "build_max": 22.8,
+        "raster_p50": 25.3,
+        "raster_p95": 67.3,
+        "raster_max": 111.8
+      }
+    }
+  }
+}

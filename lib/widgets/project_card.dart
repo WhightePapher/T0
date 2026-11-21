@@ -4,6 +4,7 @@ import '../models/mock_data.dart';
 import '../theme/motion.dart';
 import '../theme/palette.dart';
 import '../theme/tokens.dart';
+import 'focus_ring.dart';
 import 'progress_ring.dart';
 
 /// 最近项目卡片：缩略图块 + 标题 + 元信息 + 环形进度。
@@ -27,7 +28,7 @@ class _ProjectCardState extends State<ProjectCard> {
     final RecentProject project = widget.project;
     final double progress = project.done / project.total;
 
-    return MouseRegion(
+    final Widget card = MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() {
@@ -51,12 +52,15 @@ class _ProjectCardState extends State<ProjectCard> {
           child: AnimatedContainer(
             duration: T0Motion.dur(context, T0Motion.fast),
             curve: Curves.easeOut,
+            // hover 抬升 1px（B2）：只动绘制层，卡片占位不变
+            transform: Matrix4.translationValues(0, _hover ? -1 : 0, 0),
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: pal.surface,
               borderRadius: BorderRadius.circular(T0.cardRadius),
               border: Border.all(color: _hover ? pal.lineStrong : pal.line),
-              boxShadow: _hover ? pal.floatShadow : null,
+              // 双层阴影常驻（B1）：key light + ambient；hover 加深一档（B2）
+              boxShadow: _hover ? pal.floatShadowHover : pal.floatShadow,
             ),
             child: Row(
               children: <Widget>[
@@ -112,6 +116,8 @@ class _ProjectCardState extends State<ProjectCard> {
                       fontSize: 11 * context.s,
                       fontWeight: FontWeight.w600,
                       color: pal.ink,
+                      // 等宽数字（B3）：count-up 时「3/5 → 5/5」不左右抖
+                      fontFeatures: kT0TabularFigures,
                     ),
                   ),
                 ),
@@ -120,6 +126,11 @@ class _ProjectCardState extends State<ProjectCard> {
           ),
         ),
       ),
+    );
+    return T0FocusRing(
+      radius: T0.cardRadius,
+      onActivate: widget.onTap,
+      child: card,
     );
   }
 }

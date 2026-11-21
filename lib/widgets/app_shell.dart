@@ -8,6 +8,7 @@ import '../theme/motion.dart';
 import '../theme/palette.dart';
 import '../theme/theme_controller.dart';
 import '../theme/tokens.dart';
+import 'focus_ring.dart';
 import 'paper_background.dart';
 import 'primary_button.dart';
 import 'section_label.dart';
@@ -328,19 +329,24 @@ class _MenuRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final T0Palette pal = context.pal;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(
-          children: <Widget>[
-            Icon(icon, size: 16, color: pal.muted),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: context.tBody.copyWith(fontSize: 13, color: pal.ink),
-            ),
-          ],
+    return T0FocusRing(
+      radius: 10,
+      onActivate: onTap,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            children: <Widget>[
+              // 光学尺寸（B6）：菜单图标与 15px 正文对齐，从 16 收到 15
+              Icon(icon, size: 15, color: pal.muted),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: context.tBody.copyWith(fontSize: 13, color: pal.ink),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -450,7 +456,7 @@ class _NavItemState extends State<_NavItem> {
     final T0Palette pal = context.pal;
     final bool active = widget.active;
     final bool compact = widget.compact;
-    return MouseRegion(
+    final Widget item = MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
@@ -474,7 +480,8 @@ class _NavItemState extends State<_NavItem> {
             children: <Widget>[
               Icon(
                 widget.icon,
-                size: 14,
+                // 光学尺寸（B6）：与 12px 正文同档，14 显得偏细，提到 15
+                size: 15,
                 color: active || _hover ? pal.ink : pal.muted,
               ),
               if (!compact) ...<Widget>[
@@ -493,6 +500,7 @@ class _NavItemState extends State<_NavItem> {
         ),
       ),
     );
+    return T0FocusRing(radius: 7, onActivate: widget.onTap, child: item);
   }
 }
 
@@ -556,10 +564,13 @@ class _ThemeToggleState extends State<_ThemeToggle> {
     final T0Palette pal = context.pal;
     final ThemeController controller = T0Theme.of(context);
     final bool dark = controller.isDark;
-    return Tooltip(
-      message: dark ? '切换到白天' : '切换到黑夜',
-      waitDuration: const Duration(milliseconds: 240),
-      child: MouseRegion(
+    return T0FocusRing(
+      radius: T0.iconButtonSize / 2,
+      onActivate: controller.toggle,
+      child: Tooltip(
+        message: dark ? '切换到白天' : '切换到黑夜',
+        waitDuration: const Duration(milliseconds: 240),
+        child: MouseRegion(
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
@@ -581,6 +592,7 @@ class _ThemeToggleState extends State<_ThemeToggle> {
                 key: ValueKey<String>(dark ? 'theme-glyph-moon' : 'theme-glyph-sun'),
                 dark: dark,
                 color: _hover ? pal.ink : pal.ink2,
+              ),
               ),
             ),
           ),
@@ -778,6 +790,7 @@ class _StepBar extends StatelessWidget {
           child: SizedBox(
             width: double.infinity,
             child: SingleChildScrollView(
+              physics: t0ScrollPhysics(context),
               scrollDirection: Axis.horizontal,
               child: Row(children: children),
             ),
@@ -1082,6 +1095,7 @@ class PageBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final T0Metrics m = context.metrics;
     return SingleChildScrollView(
+      physics: t0ScrollPhysics(context),
       padding: EdgeInsets.fromLTRB(m.gutter, top, m.gutter, bottom),
       child: Center(
         child: ConstrainedBox(

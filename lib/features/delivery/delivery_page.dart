@@ -6,6 +6,7 @@ import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_shell.dart';
 import '../../widgets/ghost_button.dart';
+import '../../widgets/focus_ring.dart';
 import '../../widgets/motion_bits.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/progress_ring.dart';
@@ -97,6 +98,8 @@ class DeliveryPage extends StatelessWidget {
                       height: 1.1,
                       fontWeight: FontWeight.w700,
                       color: context.pal.ink,
+                      // 等宽数字（B3）：0%→100% count-up 时百分号不跟着左右跳
+                      fontFeatures: kT0TabularFigures,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -400,7 +403,7 @@ class _CheckRowState extends State<_CheckRow> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
+    final Widget row = MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
@@ -485,6 +488,7 @@ class _CheckRowState extends State<_CheckRow> {
         ),
       ),
     );
+    return T0FocusRing(radius: 10, onActivate: widget.onTap, child: row);
   }
 }
 

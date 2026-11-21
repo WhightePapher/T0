@@ -5,6 +5,7 @@ import '../../theme/motion.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/app_shell.dart';
+import '../../widgets/focus_ring.dart';
 import '../../widgets/motion_bits.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/status_dot.dart';
@@ -159,7 +160,7 @@ class _ModuleCardState extends State<_ModuleCard> {
   @override
   Widget build(BuildContext context) {
     final ProjectModule module = widget.module;
-    return MouseRegion(
+    final Widget card = MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() {
@@ -181,12 +182,15 @@ class _ModuleCardState extends State<_ModuleCard> {
           curve: T0Motion.standard,
           child: AnimatedContainer(
             duration: T0Motion.dur(context, T0Motion.fast),
+            // hover 抬升 1px（B2）
+            transform: Matrix4.translationValues(0, _hover ? -1 : 0, 0),
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
             decoration: BoxDecoration(
               color: context.pal.surface,
               borderRadius: BorderRadius.circular(T0.cardRadius),
               border: Border.all(color: _hover ? context.pal.lineStrong : context.pal.line),
-              boxShadow: _hover ? context.pal.floatShadow : null,
+              // 双层阴影常驻（B1），hover 加深（B2）
+              boxShadow: _hover ? context.pal.floatShadowHover : context.pal.floatShadow,
             ),
             child: Row(
               children: <Widget>[
@@ -283,6 +287,7 @@ class _ModuleCardState extends State<_ModuleCard> {
         ),
       ),
     );
+    return T0FocusRing(radius: T0.cardRadius, onActivate: widget.onOpen, child: card);
   }
 }
 
