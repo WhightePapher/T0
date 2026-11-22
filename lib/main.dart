@@ -245,12 +245,11 @@ Route<dynamic> _fadeUpRoute(Widget page, RouteSettings settings) {
       );
       return AnimatedBuilder(
         animation: curved,
+        // 只淡入、不位移：整页在 240ms 里上移 8px 会被读成
+        // 「切页时页面上下震荡」，这里保留 Opacity，删掉 Transform.translate。
         builder: (BuildContext context, Widget? child) => Opacity(
           opacity: curved.value.clamp(0.0, 1.0),
-          child: Transform.translate(
-            offset: Offset(0, 8 * (1 - curved.value)),
-            child: child,
-          ),
+          child: child,
         ),
         child: child,
       );

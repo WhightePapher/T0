@@ -287,14 +287,6 @@ class _TopBar extends StatelessWidget {
                   go(context, '/workspace');
                 },
               ),
-              _MenuRow(
-                icon: Icons.help_outline,
-                label: '帮助',
-                onTap: () {
-                  Navigator.of(context).pop();
-                  showHelpDialog(context);
-                },
-              ),
               const Divider(height: 12),
               _MenuRow(
                 icon: Icons.add,
@@ -375,15 +367,56 @@ class _BrandMark extends StatelessWidget {
   }
 }
 
-class _NavSegmented extends StatelessWidget {
+/// 顶栏分段导航：两个 tab 等宽，选中态是一条滑动的指示块。
+///
+/// 工作台 <-> 当前项目 是两条独立路由，[AppShell] 每次重建，指示块本来会
+/// 「重新出现」而不是滑过去；用这个文件级变量记住上一次的位置，让新页面
+/// 里的指示块从旧位置滑到新位置，和页面 240ms 的淡入对上。
+String? _lastNavRoute;
+
+class _NavSegmented extends StatefulWidget {
   const _NavSegmented({this.activeNav, this.compact = false});
 
   final String? activeNav;
   final bool compact;
 
   @override
+  State<_NavSegmented> createState() => _NavSegmentedState();
+}
+
+class _NavSegmentedState extends State<_NavSegmented> {
+  late double _from;
+  late double _to;
+
+  /// 0 = 工作台，1 = 当前项目。
+  double get _target => widget.activeNav == '/workspace' ? 1.0 : 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _to = _target;
+    _from = _lastNavRoute == null
+        ? _to
+        : (_lastNavRoute == '/workspace' ? 1.0 : 0.0);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _lastNavRoute = widget.activeNav,
+    );
+  }
+
+  @override
+  void didUpdateWidget(_NavSegmented old) {
+    super.didUpdateWidget(old);
+    if (old.activeNav != widget.activeNav) {
+      _from = _to;
+      _to = _target;
+      _lastNavRoute = widget.activeNav;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final T0Palette pal = context.pal;
+    final bool compact = widget.compact;
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -391,31 +424,57 @@ class _NavSegmented extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: pal.line),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          _NavItem(
-            icon: Icons.home_outlined,
-            label: '工作台',
-            active: activeNav == '/workbench',
-            compact: compact,
-            onTap: () => go(context, '/workbench'),
-          ),
-          _NavItem(
-            icon: Icons.grid_view_outlined,
-            label: '当前项目',
-            active: activeNav == '/workspace',
-            compact: compact,
-            onTap: () => go(context, '/workspace'),
-          ),
-          _NavItem(
-            icon: Icons.help_outline,
-            label: '帮助',
-            active: false,
-            compact: compact,
-            onTap: () => showHelpDialog(context),
-          ),
-        ],
+      child: SizedBox(
+        width: compact ? 152 : 196,
+        height: compact ? 26 : 30,
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            // 指示块：等宽两格，位置 0..1 用 260ms 滑过去，不做瞬切
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: _from, end: _to),
+              duration: context.anim(const Duration(milliseconds: 260)),
+              curve: Curves.easeOutCubic,
+              builder: (BuildContext context, double t, Widget? child) {
+                return FractionallySizedBox(
+                  alignment: Alignment(-1 + 2 * t.clamp(0.0, 1.0), 0),
+                  widthFactor: 0.5,
+                  heightFactor: 1,
+                  child: child,
+                );
+              },
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: pal.surface,
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(color: pal.line),
+                ),
+              ),
+            ),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.home_outlined,
+                    label: '工作台',
+                    active: widget.activeNav == '/workbench',
+                    compact: compact,
+                    onTap: () => go(context, '/workbench'),
+                  ),
+                ),
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.grid_view_outlined,
+                    label: '当前项目',
+                    active: widget.activeNav == '/workspace',
+                    compact: compact,
+                    onTap: () => go(context, '/workspace'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -447,41 +506,31 @@ class _NavItemState extends State<_NavItem> {
   Widget build(BuildContext context) {
     final T0Palette pal = context.pal;
     final bool active = widget.active;
-    final bool compact = widget.compact;
+    // 选中态由底下那块滑动的指示块表达，这里只负责文字/图标的明暗与字重
+    final bool lit = active || _hover;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: context.anim(const Duration(milliseconds: 140)),
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 10 : 14,
-            vertical: 7,
-          ),
-          decoration: BoxDecoration(
-            // hover 用整块 surface + line 描边（和 active 同形但字重不变），
-            // 截图里能明确看出悬停反馈
-            color: active || _hover ? pal.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(7),
-            border: Border.all(color: active || _hover ? pal.line : Colors.transparent),
-          ),
+        child: Center(
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Icon(
                 widget.icon,
                 size: 14,
-                color: active || _hover ? pal.ink : pal.muted,
+                color: lit ? pal.ink : pal.muted,
               ),
-              if (!compact) ...<Widget>[
+              if (!widget.compact) ...<Widget>[
                 const SizedBox(width: 7),
                 Text(
                   widget.label,
                   style: context.tBody.copyWith(
                     fontSize: 12,
-                    color: active || _hover ? pal.ink : pal.muted,
+                    color: lit ? pal.ink : pal.muted,
                     fontWeight: active ? FontWeight.w600 : FontWeight.w400,
                   ),
                 ),

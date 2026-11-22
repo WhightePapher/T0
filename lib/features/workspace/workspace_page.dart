@@ -67,6 +67,12 @@ class _WorkspacePageState extends State<WorkspacePage> {
   bool _loading = false;
   bool _aiOpen = false;
 
+  /// 画布底部两枚开关：
+  /// · [_scopeCurrentOnly] = 本次 AI 改动只作用当前模块，还是重做整条流程；
+  /// · [_keepHistory] = 应用修改后 v1 是否还留着，可对比 / 可回退。
+  bool _scopeCurrentOnly = true;
+  bool _keepHistory = true;
+
   /// 当前模块有没有 v2（编辑后的版本）。
   bool get _hasVersion2 => _store.hasEdits(_activeId);
 
@@ -521,8 +527,13 @@ class _WorkspacePageState extends State<WorkspacePage> {
     final List<Widget> actions = <Widget>[
       _IconSquare(
         icon: Icons.undo,
-        tooltip: '撤销',
+        tooltip: _keepHistory ? '撤销' : '未保留历史版本',
+        muted: !_keepHistory,
         onTap: () {
+          if (!_keepHistory) {
+            showT0Toast(context, '未保留历史版本，无法回到版本 1。');
+            return;
+          }
           _store.revertEdit(_activeId);
           showT0Toast(context, '已撤销上一次修改，回到版本 1。');
         },
@@ -539,19 +550,27 @@ class _WorkspacePageState extends State<WorkspacePage> {
       const SizedBox(width: 24),
       _HoldCompare(
         active: _holding,
-        onChanged: (bool value) => setState(() => _holding = value),
+        onChanged: (bool value) {
+          if (!_keepHistory) {
+            if (value) showT0Toast(context, '未保留历史版本，无法对比 v1。');
+            return;
+          }
+          setState(() => _holding = value);
+        },
       ),
       const SizedBox(width: 8),
       SecondaryButton(
         label: '前后对比',
         dense: true,
-        onPressed: () => _openCompare(context),
+        onPressed: _keepHistory ? () => _openCompare(context) : null,
       ),
       const SizedBox(width: 8),
       Tooltip(
-        message: edited ? '当前是版本 2' : '当前是版本 1',
+        message: edited
+            ? (_keepHistory ? '当前是版本 2' : '当前是版本 2，v1 已被覆盖')
+            : '当前是版本 1',
         child: Text(
-          edited ? 'v2' : 'v1',
+          edited ? (_keepHistory ? 'v2' : 'v2·覆盖') : 'v1',
           style: context.tMono.copyWith(
             fontSize: 10 * context.s,
             color: edited ? context.pal.accent : context.pal.ink2,
@@ -635,9 +654,35 @@ class _WorkspacePageState extends State<WorkspacePage> {
           ),
           if (!m.isMobile) ...<Widget>[
             const SizedBox(width: 12),
-            const _BriefChip(text: '仅当前模块'),
+            _BriefChip(
+              text: '仅当前模块',
+              active: _scopeCurrentOnly,
+              tooltip: _scopeCurrentOnly
+                  ? '只重做当前模块（点击改为整条流程）'
+                  : '重做整条流程（点击改为只做当前模块）',
+              onTap: () => setState(() {
+                _scopeCurrentOnly = !_scopeCurrentOnly;
+                showT0Toast(
+                  context,
+                  _scopeCurrentOnly ? '作用范围：只重做当前模块。' : '作用范围：重做整条流程。',
+                );
+              }),
+            ),
             const SizedBox(width: 8),
-            const _BriefChip(text: '保留历史版本'),
+            _BriefChip(
+              text: '保留历史版本',
+              active: _keepHistory,
+              tooltip: _keepHistory
+                  ? '保留 v1，便于对比与回退（点击关闭）'
+                  : '应用后直接覆盖 v1（点击开启）',
+              onTap: () => setState(() {
+                _keepHistory = !_keepHistory;
+                showT0Toast(
+                  context,
+                  _keepHistory ? '已保留历史版本，可以回到 v1。' : '未保留历史版本：应用修改后会覆盖 v1。',
+                );
+              }),
+            ),
           ],
         ],
       ),
@@ -1389,7 +1434,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                         borderRadius: BorderRadius.circular(T0.pillRadius),
                       ),
                       child: Text(
-                        '作用范围：当前模块',
+                        _scopeCurrentOnly ? '作用范围：当前模块' : '作用范围：整条流程',
                         style: context.tMeta.copyWith(
                           fontSize: 9.5 * context.s,
                           color: context.pal.accentStrong,
@@ -1429,7 +1474,11 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  edited ? '当前为版本 2，可随时撤销回到版本 1。' : '当前为版本 1，应用修改后会生成版本 2。',
+                  edited
+                      ? (_keepHistory
+                          ? '当前为版本 2，可随时撤销回到版本 1。'
+                          : '当前为版本 2，v1 已被覆盖，撤销不可用。')
+                      : '当前为版本 1，应用修改后会生成版本 2。',
                   style: context.tMeta.copyWith(fontSize: 10 * context.s),
                 ),
               ],
@@ -1462,7 +1511,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: SecondaryButton(
-                      label: '补充并重新生成',
+                      label: _scopeCurrentOnly ? '补充并重新生成' : '重新生成整条流程',
                       dense: true,
                       expand: true,
                       onPressed: () => _apply(supplement: true),
@@ -1673,12 +1722,16 @@ class _IconSquare extends StatefulWidget {
     required this.onTap,
     this.tooltip,
     this.dense = false,
+    this.muted = false,
   });
 
   final IconData icon;
   final VoidCallback onTap;
   final String? tooltip;
   final bool dense;
+
+  /// 置灰但**仍然可点**：点下去由调用方弹 toast 解释为什么现在不可用。
+  final bool muted;
 
   @override
   State<_IconSquare> createState() => _IconSquareState();
@@ -1690,8 +1743,9 @@ class _IconSquareState extends State<_IconSquare> {
   @override
   Widget build(BuildContext context) {
     final double size = widget.dense ? 24 : 30;
+    final bool active = !widget.muted;
     final Widget button = MouseRegion(
-      cursor: SystemMouseCursors.click,
+      cursor: active ? SystemMouseCursors.click : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
@@ -1701,13 +1755,15 @@ class _IconSquareState extends State<_IconSquare> {
           height: size,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: _hover ? context.pal.bg : Colors.transparent,
+            color: active && _hover ? context.pal.bg : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
             widget.icon,
             size: widget.dense ? 13 : 15,
-            color: _hover ? context.pal.ink : context.pal.ink2,
+            color: !active
+                ? context.pal.muted
+                : (_hover ? context.pal.ink : context.pal.ink2),
           ),
         ),
       ),
@@ -1812,25 +1868,68 @@ class _HoldHint extends StatelessWidget {
   }
 }
 
+/// 画布底部的开关胶囊：点一下就在开 / 关之间切，开着的时候是实心强调色。
 class _BriefChip extends StatelessWidget {
-  const _BriefChip({required this.text});
+  const _BriefChip({
+    required this.text,
+    required this.active,
+    required this.onTap,
+    this.tooltip,
+  });
 
   final String text;
+  final bool active;
+  final VoidCallback onTap;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: context.pal.bg,
-        borderRadius: BorderRadius.circular(T0.pillRadius),
-        border: Border.all(color: context.pal.line),
-      ),
-      child: Text(
-        text,
-        style: context.tMeta.copyWith(fontSize: 10 * context.s),
+    final T0Palette pal = context.pal;
+    final Widget chip = MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: context.anim(const Duration(milliseconds: 140)),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: active
+                ? pal.accent.withValues(alpha: 0.10)
+                : pal.bg,
+            borderRadius: BorderRadius.circular(T0.pillRadius),
+            border: Border.all(
+              color: active ? pal.accent : pal.line,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (active) ...<Widget>[
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: pal.accent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+              ],
+              Text(
+                text,
+                style: context.tMeta.copyWith(
+                  fontSize: 10 * context.s,
+                  color: active ? pal.accentStrong : null,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
+    if (tooltip == null) return chip;
+    return Tooltip(message: tooltip!, child: chip);
   }
 }
 
