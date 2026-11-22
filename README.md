@@ -5,6 +5,14 @@
 - 视觉与交互说明：`docs/视觉设计说明.md`
 - 六页 1440×900 实拍：`docs/screenshots/`
 
+## 在线访问（GitHub Pages）
+
+**https://whightepapher.github.io/T0/**
+
+- 发布源：`gh-pages` 分支（`main` 的 `flutter build web --release` 产物 `build/web` 推上去即自动更新）
+- 看当前线上是哪个版本：仓库 → Branches 选 `gh-pages` 看最新提交，或 GitHub → Settings → Pages 看地址与状态
+- 本地跑：`flutter run -d chrome`
+
 ## 运行
 
 ```bash
