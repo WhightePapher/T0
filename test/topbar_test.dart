@@ -178,7 +178,9 @@ void main() {
 
     // 平板断点（700..1100）上右侧多出「项目名 + 已保存」，最窄处不能挤出黄条
     for (final double width in <double>[700, 800, 1099]) {
-      testWidgets('平板 ${width.toInt()} 宽：项目内顶栏不溢出', (WidgetTester tester) async {
+      testWidgets('平板 ${width.toInt()} 宽：项目内顶栏不溢出', (
+        WidgetTester tester,
+      ) async {
         await _pumpAt(tester, '/intake', size: Size(width, 900));
         expect(find.byKey(_name), findsOneWidget);
         expect(find.byKey(_theme), findsOneWidget);
@@ -224,15 +226,19 @@ void main() {
     testWidgets('白天 ↔ 黑夜：这一段的字色 / 底色跟着变，位置不变', (WidgetTester tester) async {
       await _pumpAt(tester, '/intake');
       final Rect before = tester.getRect(find.byKey(_name));
-      final Color nameColorLight =
-          tester.widget<Text>(find.byKey(_name)).style!.color!;
+      final Color nameColorLight = tester
+          .widget<Text>(find.byKey(_name))
+          .style!
+          .color!;
       final Color surfaceLight = _topbarColor(tester);
 
       await tester.tap(find.byKey(_theme));
       await tester.pumpAndSettle();
 
-      final Color nameColorDark =
-          tester.widget<Text>(find.byKey(_name)).style!.color!;
+      final Color nameColorDark = tester
+          .widget<Text>(find.byKey(_name))
+          .style!
+          .color!;
       final Color surfaceDark = _topbarColor(tester);
 
       expect(nameColorDark, isNot(equals(nameColorLight)));
@@ -240,6 +246,24 @@ void main() {
 
       final Rect after = tester.getRect(find.byKey(_name));
       expect(after, before);
+    });
+
+    group('窄屏（372×812）右侧不能跟项目名粘在一起', () {
+      testWidgets('项目页：主题 + 菜单贴住右边缘，与项目名之间留出空白', (WidgetTester tester) async {
+        await _pumpAt(tester, '/intake', size: const Size(372, 812));
+        final double w =
+            tester.view.physicalSize.width / tester.view.devicePixelRatio;
+        final Rect name = tester.getRect(find.byKey(_name));
+        final Rect theme = tester.getRect(find.byKey(_theme));
+        final Rect add = tester.getRect(find.byKey(_add));
+
+        // 手机端水平内边距 14：菜单按钮右边缘应贴着 w - 14
+        expect(add.right, moreOrLessEquals(w - 14, epsilon: 0.8));
+        // 主题与菜单之间 8px 不变
+        expect(add.left - theme.right, moreOrLessEquals(8, epsilon: 0.01));
+        // 项目名与主题按钮之间必须有明显空白（不是连在一起）
+        expect(theme.left - name.right, greaterThan(20));
+      });
     });
   });
 }
